@@ -12,7 +12,7 @@ Maxx can move money through PayPal. This page says what is built, how to run it,
 
 Live (production) PayPal is refused at start-up. Maxx is a hackathon prototype and has no seller onboarding, KYC or legal review.
 
-**Verification status.** The simulator and the PayPal client are covered by automated tests (the client against a mock HTTP transport that checks request bodies, headers and error handling). On 8 Nov 2026 the sandbox mode ran end to end through the app against PayPal's sandbox: hold in PayPal's popup, partial capture, void, and a payout reaching `SUCCESS`, with PayPal's fees read back into the books. On 8 Nov the same path also ran on the hosted demo, where PayPal's webhooks (`PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.PAYOUTS-ITEM.SUCCEEDED`) reached the API and passed signature verification. The ids are in [verification](verification.md). Not yet checked against the sandbox: an `UNCLAIMED` payout, and the tracking number on the buyer's PayPal order.
+**Verification status.** The simulator and the PayPal client are covered by automated tests (the client against a mock HTTP transport that checks request bodies, headers and error handling). On 8 Nov 2026 the sandbox mode ran end to end through the app against PayPal's sandbox: hold in PayPal's popup, partial capture, void, and a payout reaching `SUCCESS`, with PayPal's fees read back into the books. On 8 Nov the same path also ran on the hosted demo, where PayPal's webhooks (`PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.PAYOUTS-ITEM.SUCCEEDED`) reached the API and passed signature verification. The ids are in [verification](verification.md). The seller's tracking number reached the buyer's PayPal order there too. Not yet checked against the sandbox: an `UNCLAIMED` payout.
 
 ## What each part does
 

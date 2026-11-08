@@ -25,6 +25,7 @@ simulated tracking.
 | Hold | $170.00 authorized | order `66F12448KB923753S`, authorization `13A276960V113700A` |
 | Negotiation | Allocated at $138.00; 451 of 601 buyers served at $130.00 to $142.00; the run receipt listed each seller's final offer and units sold | |
 | Capture | $138.00, the rest of the hold released; PayPal fee $5.31 | capture `75823843P1282020X` |
+| Tracking | The simulated seller's tracking number was added to the buyer's PayPal order (Orders v2 `/track`); PayPal shows the tracker as SHIPPED | tracker `75823843P1282020X-1ZMAXX010261483331` |
 | Payout on delivery | $126.96 to the seller (92%), Maxx fee $11.04 (8%), status SENT; PayPal payout fee $0.25 | payout item `BXTHCSAPTZXSY` |
 | Books | Reconciled. Maxx keeps $11.04 − $5.31 − $0.25 = $5.48; no PayPal fee left unknown | |
 | Webhooks | PayPal sent `PAYMENT.CAPTURE.COMPLETED` and `PAYMENT.PAYOUTS-ITEM.SUCCEEDED` to the live API; each passed signature verification (HTTP 200) | webhook `4YW58479VN8475801` |
