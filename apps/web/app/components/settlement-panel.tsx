@@ -60,10 +60,14 @@ export default function SettlementPanel({ blocId, config, signedIn }: { blocId: 
         {Number(ledger.held_for_shipping) > 0 && <div><dt>Held until the seller ships</dt><dd>{usd(ledger.held_for_shipping)}</dd></div>}
         <div><dt>Maxx fee ({config.platform_fee_percent}%, from sellers{Number(ledger.held_for_shipping) > 0 ? ", taken at payout" : ""})</dt><dd>{usd(ledger.platform_fee)}</dd></div>
         <div><dt>Paid to sellers</dt><dd>{usd(ledger.seller_payouts)}</dd></div>
+        {Number(ledger.platform_fee) > 0 && <>
+          <div><dt>PayPal fees, paid by Maxx out of its fee</dt><dd>{usd((Number(ledger.paypal_capture_fees) + Number(ledger.paypal_payout_fees)).toFixed(2))} <small>{usd(ledger.paypal_capture_fees)} on captures · {usd(ledger.paypal_payout_fees)} on payouts{ledger.paypal_fees_unknown > 0 ? ` · ${ledger.paypal_fees_unknown} not yet reported` : ""}</small></dd></div>
+          <div><dt>Maxx keeps</dt><dd>{usd(ledger.maxx_margin)}</dd></div>
+        </>}
         {ledger.failed_count > 0 && <div className="warn"><dt>Needs attention</dt><dd>{ledger.failed_count} payments failed</dd></div>}
       </dl>
       {ledger.payouts.length > 0 && <table><thead><tr><th>Seller</th><th>Units</th><th>Gross</th><th>Fee</th><th>Net</th><th>Status</th></tr></thead><tbody>{ledger.payouts.map(row => <tr key={row.seller}><td>{row.seller}</td><td>{row.units}</td><td>{usd(row.gross)}</td><td>{usd(row.fee)}</td><td>{usd(row.net)}</td><td>{row.status === "SENT" ? "Sent" : row.status.toLowerCase()}</td></tr>)}</tbody></table>}
-      <p className="small muted">Every dollar captured is Maxx’s fee, a seller payout, or held by Maxx until the seller ships. “Reconciled” means those lines add up to the captured total exactly{ledger.simulated ? ", here against the simulator’s ledger" : ", with PayPal ids behind each line"}. The simulated crowd seeded into demo Blocs places no holds: only real people’s PayPal holds appear here.</p>
+      <p className="small muted">Every dollar captured is Maxx’s fee, a seller payout, or held by Maxx until the seller ships. “Reconciled” means those lines add up to the captured total exactly{ledger.simulated ? ", here against the simulator’s ledger" : ", with PayPal ids behind each line"}. PayPal’s own fees are the ones PayPal reports on each capture and payout{ledger.simulated ? " (the simulator uses the US sandbox rates)" : ""}. The simulated crowd seeded into demo Blocs places no holds: only real people’s PayPal holds appear here.</p>
       {mine && <p className="small muted">Your PayPal ids: order {shortId(mine.paypal.order)} · authorization {shortId(mine.paypal.authorization)} · capture {shortId(mine.paypal.capture)}</p>}
     </Disclosure>
   </motion.section>;

@@ -162,7 +162,7 @@ def _receipt(payment: dict, titles: dict[str, str]) -> dict:
 def receipts(user: CurrentUser, runtime: RuntimeDep):
     store = runtime.store
     titles = {b.id: b.title for b in store.list()}
-    return [_receipt(p, titles) for p in ledger.for_user(user.id)]
+    return [_receipt(p, titles) for p in ledger.for_user(user.id) if service.placed(p)]
 
 
 @router.get("/blocs/{id}/ledger")

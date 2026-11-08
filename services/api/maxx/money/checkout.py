@@ -345,6 +345,10 @@ async def capture_order(user_id: str, order_id: str) -> dict:
         ledger.update_payment(payment["id"], status="FAILED", error=exc.name[:60] or "declined")
         raise Refused("PayPal could not complete the payment.") from exc
     ledger.update_payment(
-        payment["id"], status="CAPTURED", capture_id=capture["capture_id"], captured_amount=amount
+        payment["id"],
+        status="CAPTURED",
+        capture_id=capture["capture_id"],
+        captured_amount=amount,
+        paypal_fee=capture.get("paypal_fee"),
     )
     return {"order_id": order_id, "status": capture["status"], "capture_id": capture["capture_id"]}

@@ -17,5 +17,5 @@ export const SITE = {
   securityEmail: process.env.SECURITY_EMAIL ?? "security@maxx.example",
   supportEmail: process.env.SUPPORT_EMAIL ?? "support@maxx.example",
   sellerEmail: process.env.SELLER_EMAIL ?? "sellers@maxx.example",
-  feePercent: process.env.PLATFORM_FEE_PERCENT ?? "5",
+  feePercent: process.env.PLATFORM_FEE_PERCENT ?? "8",
 } as const;

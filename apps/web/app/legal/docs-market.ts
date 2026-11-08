@@ -36,7 +36,7 @@ export const sellerTerms: Doc = {
     ] },
     { id: "fees", title: "Fees and payouts", body: [
       { list: [
-        `Maxx’s fee is ${SITE.feePercent}% of the sale price of each order, taken from your payout. There are no listing or monthly fees. Buyers pay no fee.`,
+        `Maxx’s fee is ${SITE.feePercent}% of the sale price of each order, taken from your payout. Maxx pays PayPal’s processing and payout fees for these orders out of its fee. There are no listing or monthly fees. Buyers pay no fee.`,
         "You are paid after you mark an order shipped with a carrier and tracking number. Maxx pays you by PayPal Payouts to your confirmed payout email. Orders you never ship are refunded to the buyer and you are not paid.",
         "If a buyer is refunded after you were paid, you owe that amount back. Maxx deducts it from your next payouts, and may ask you to pay it if you stop selling.",
         "If a problem is opened before you have been paid for an order, the payout waits until it is resolved. We may withhold payouts that relate to a breach of this agreement or to suspected fraud.",
@@ -177,7 +177,7 @@ export const payments: Doc = {
       ] },
     ] },
     { id: "fees", title: "Fees", body: [
-      `Buyers pay no Maxx fee. Maxx charges sellers ${SITE.feePercent}% of each sale, taken from the seller’s payout. PayPal’s own fees and currency conversion follow PayPal’s terms for the account concerned.`,
+      `Buyers pay no Maxx fee. Maxx charges sellers ${SITE.feePercent}% of each sale, taken from the seller’s payout. Maxx pays PayPal’s processing and payout fees for Bloc orders out of its fee. Currency conversion, if any, follows PayPal’s terms for the account concerned.`,
     ] },
     { id: "agent", title: "Agent checkout", body: [
       "The checkout agent builds an order from an offer you were shown. A guard compares the order amount with the offer and your typed approval, and refuses any difference. The agent holds no credentials and cannot spend by itself.",

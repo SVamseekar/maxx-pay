@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from maxx import schema, storage
 from maxx.config import settings
 from maxx.money import ledger
+from maxx.money.paypal import capture_fee, fee_value
 
 SIGNATURE_HEADER = "x-maxx-sim-signature"
 
@@ -63,6 +64,7 @@ def _apply(event_type: str, resource: dict) -> str:
             "sender_item_id": str((resource.get("payout_item") or {}).get("sender_item_id", "")),
             "status": str(resource.get("transaction_status", "")),
             "error": str((resource.get("errors") or {}).get("name", "")),
+            "fee": fee_value(resource.get("payout_item_fee")),
         }
         batch = str(resource.get("payout_batch_id", ""))
         return fulfilment.apply_payout_item(batch, item)
@@ -83,10 +85,17 @@ def _apply(event_type: str, resource: dict) -> str:
         amount = _amount(resource)
         if amount is not None and amount > Decimal(payment["max_amount"]):
             return "capture above the hold; ignored"
+        fee = capture_fee(resource)
         if payment["status"] in {"AUTHORIZED", "CAPTURE_FAILED"}:
             ledger.update_payment(
-                payment["id"], status="CAPTURED", capture_id=resource_id, captured_amount=amount
+                payment["id"],
+                status="CAPTURED",
+                capture_id=resource_id,
+                captured_amount=amount,
+                paypal_fee=fee,
             )
+        elif payment["status"] == "CAPTURED" and fee is not None and payment["paypal_fee"] is None:
+            ledger.update_payment(payment["id"], paypal_fee=fee)
         return "capture confirmed"
     if event_type == "PAYMENT.CAPTURE.DENIED":
         if payment["status"] != "CAPTURED":

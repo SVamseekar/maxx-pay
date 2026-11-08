@@ -19,6 +19,7 @@ export type Payouts = { seller: string; method: string; units: number; gross: st
 export type Ledger = {
   currency: string; holds: number; held_total: string; captured_count: number; captured_total: string;
   voided_count: number; voided_total: string; failed_count: number; platform_fee: string; seller_payouts: string; held_for_shipping: string;
+  paypal_capture_fees: string; paypal_payout_fees: string; paypal_fees_unknown: number; maxx_margin: string;
   payouts: Payouts[]; reconciled: boolean; settlement: "WAITING" | "NOT_NEEDED" | "RUNNING" | "PARTIAL" | "DONE"; simulated: boolean;
 };
 
@@ -41,7 +42,7 @@ export function loadMoneyConfig(): Promise<MoneyConfig> {
   return cached;
 }
 
-const OFF: MoneyConfig = { mode: "off", enabled: false, simulated: false, currency: "USD", client_id: "", sdk_url: "", platform_fee_percent: "5", negative_testing: false, crypto: { enabled: false, asset: "PYUSD", chain: "", address: "", simulated: false } };
+const OFF: MoneyConfig = { mode: "off", enabled: false, simulated: false, currency: "USD", client_id: "", sdk_url: "", platform_fee_percent: "8", negative_testing: false, crypto: { enabled: false, asset: "PYUSD", chain: "", address: "", simulated: false } };
 
 /** `null` while loading, then the configuration (the "off" shape if the service cannot be reached). */
 export function useMoneyConfig(): MoneyConfig | null {

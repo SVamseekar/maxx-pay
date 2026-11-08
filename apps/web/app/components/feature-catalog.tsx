@@ -104,7 +104,7 @@ const AUDIENCES: Audience[] = [
 ];
 
 const STATS = [
-  { value: "5%", label: "Maxx fee, from the seller's side only" },
+  { value: "8%", label: "Maxx fee, from the seller's side only" },
   { value: "$0", label: "charged to buyers when there is no deal" },
   { value: "24 h", label: "for a seller to answer a problem report" },
   { value: "60 days", label: "to report a problem with an order" },

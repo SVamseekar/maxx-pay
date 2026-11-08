@@ -89,7 +89,7 @@ class Settings(BaseSettings):
     paypal_base_url: str = "https://api-m.sandbox.paypal.com"
     paypal_currency: str = "USD"
     paypal_sdk_url: str = "https://www.sandbox.paypal.com/web-sdk/v6/core"
-    platform_fee_percent: str = "5"
+    platform_fee_percent: str = "8"
     settlement_concurrency: int = Field(default=10, ge=1, le=50)
     paypal_negative_testing: bool = False
     checkout_max_amount: str = "500"

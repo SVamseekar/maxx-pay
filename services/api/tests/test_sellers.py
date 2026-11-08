@@ -26,7 +26,7 @@ def test_overview_lists_terms_prohibited_items_and_the_fee(runtime):
         assert client.get("/seller").status_code == 401
         sign_up(client)
         data = client.get("/seller").json()
-    assert data["seller"] is None and len(data["terms"]) >= 6 and data["fee_percent"] == "5"
+    assert data["seller"] is None and len(data["terms"]) >= 6 and data["fee_percent"] == "8"
     assert any("Cryptocurrency" in item for item in data["prohibited"])
     assert any("not ship" in term for term in data["terms"])  # Maxx is not the shipper
     assert data["min_return_days"] == 14 and "GB" in data["countries"]

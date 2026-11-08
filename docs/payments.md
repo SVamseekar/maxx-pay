@@ -12,7 +12,7 @@ Maxx can move money through PayPal. This page says what is built, how to run it,
 
 Live (production) PayPal is refused at start-up. Maxx is a hackathon prototype and has no seller onboarding, KYC or legal review.
 
-**Verification status.** The simulator and the PayPal client are covered by automated tests (the client against a mock HTTP transport that checks request bodies, headers and error handling). The sandbox mode has **not** been run against PayPal itself in this repository, because no sandbox credentials were available. Treat the first sandbox run as a test: the checklist below lists what to look at.
+**Verification status.** The simulator and the PayPal client are covered by automated tests (the client against a mock HTTP transport that checks request bodies, headers and error handling). On 8 Nov 2026 the sandbox mode ran end to end through the app against PayPal's sandbox: hold in PayPal's popup, partial capture, void, and a payout reaching `SUCCESS`, with PayPal's fees read back into the books. The ids are in [verification](verification.md). Not yet checked against the sandbox: webhooks (they need a public API address), an `UNCLAIMED` payout, and the tracking number on the buyer's PayPal order.
 
 ## What each part does
 
@@ -20,8 +20,8 @@ Live (production) PayPal is refused at start-up. Maxx is a hackathon prototype a
 1. **Join.** The member picks a maximum. The API creates an order with `intent: AUTHORIZE` for that amount. The buyer approves it on PayPal. The API then authorizes the order, which places a hold, and only then adds the member to the Bloc. If the Bloc changed in the meantime, the hold is voided.
 2. **Leave.** The member is marked as left first, then the hold is voided. A PayPal outage can delay the release but can never leave someone committed.
 3. **Clear.** When the negotiation ends, each winner is captured at their own final price with `final_capture: true`, so PayPal releases the rest of the hold. Everyone else is voided. If there is no deal, every hold is voided.
-4. **Pay sellers.** The Maxx fee (`PLATFORM_FEE_PERCENT`, default 5%) is taken from the seller side, so buyers never pay more than the winning price. **Every seller, simulated or real, is paid per order** with one Payouts item, when the carrier confirms the parcel: on delivery for new sellers, at the first scan once trusted (see [marketplace](marketplace.md)). Each payout item is followed (webhook or poll) until PayPal reports it `SUCCESS`, `UNCLAIMED`, returned or failed; failed items are retried and the seller is told. Unshipped orders are refunded. Buyers pay nothing extra.
-5. **Reconcile.** `GET /money/blocs/{id}/ledger` shows the books for the Bloc. "Reconciled" means everything captured equals fees plus sent payouts, to the cent.
+4. **Pay sellers.** The Maxx fee (`PLATFORM_FEE_PERCENT`, default 8%, which covers PayPal's own capture and payout fees) is taken from the seller side, so buyers never pay more than the winning price. **Every seller, simulated or real, is paid per order** with one Payouts item, when the carrier confirms the parcel: on delivery for new sellers, at the first scan once trusted (see [marketplace](marketplace.md)). Each payout item is followed (webhook or poll) until PayPal reports it `SUCCESS`, `UNCLAIMED`, returned or failed; failed items are retried and the seller is told. Unshipped orders are refunded. Buyers pay nothing extra.
+5. **Reconcile.** `GET /money/blocs/{id}/ledger` shows the books for the Bloc. "Reconciled" means everything captured equals fees plus sent payouts, to the cent. The ledger also records PayPal's own fees as PayPal reports them: `seller_receivable_breakdown.paypal_fee` on each capture (response or `PAYMENT.CAPTURE.COMPLETED` webhook) and `payout_item_fee` on each payout item (poll or `PAYMENT.PAYOUTS-ITEM.*` webhook). Maxx pays these out of its own fee, so the books show `paypal_capture_fees`, `paypal_payout_fees`, and `maxx_margin` (Maxx fee less both). A fee PayPal has not reported yet is counted in `paypal_fees_unknown`, never guessed. The simulator charges the rates seen in the US sandbox on 8 Nov 2026: 3.49% + $0.49 per capture and $0.25 per paid payout item.
 
 Safety rules in code, each with a test:
 - A capture can never exceed the member's maximum (checked against the member, the ledger row and PayPal's hold).
@@ -85,7 +85,7 @@ Add `PAYPAL_NEGATIVE_TESTING=true` to get a "Test a failure" menu in the hold di
 4. Set `PAYPAL_MODE=sandbox` for the web app too: it loosens the page's Content-Security-Policy for `www.sandbox.paypal.com` only in this mode.
 5. Run the join, close and receipts steps above with the sandbox buyer.
 
-First-run things to check (not yet verified here): that the v6 SDK popup opens and returns an approval (`apps/web/app/components/paypal-approval.tsx`), that authorize returns an authorization id, that the partial capture shows the lower amount in the buyer's PayPal activity, that a payout item reaches `SUCCESS` (and that a receiver without a PayPal account shows as `UNCLAIMED`), and that the tracking number added with `/v2/checkout/orders/{id}/track` appears on the buyer's order (the carrier codes in `money/paypal.py` `PAYPAL_CARRIERS` follow PayPal's list and need that check).
+Checked on 8 Nov 2026: the v6 SDK popup opens and returns an approval, authorize returns an authorization id, the partial capture takes only the allocated price, and a payout item reaches `SUCCESS`. Still to check: that a receiver without a PayPal account shows as `UNCLAIMED`, and that the tracking number added with `/v2/checkout/orders/{id}/track` appears on the buyer's order (the carrier codes in `money/paypal.py` `PAYPAL_CARRIERS` follow PayPal's list and need that check).
 
 ## Configuration reference
 
@@ -94,7 +94,7 @@ First-run things to check (not yet verified here): that the v6 SDK popup opens a
 | `PAYPAL_MODE` | `off` | `off`, `simulator` or `sandbox` |
 | `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` | empty | Sandbox credentials. The client id is sent to the browser (it is public by design). The secret never leaves the API. |
 | `PAYPAL_BASE_URL` | PayPal sandbox | Must be a sandbox host or the server refuses to start |
-| `PLATFORM_FEE_PERCENT` | `5` | Taken from the seller side of each payout |
+| `PLATFORM_FEE_PERCENT` | `8` | Taken from the seller side of each payout. Sized to cover PayPal's capture fee (3.49% + $0.49 in sandbox) and the payout fee |
 | `SETTLEMENT_CONCURRENCY` | `10` | Parallel PayPal calls during a settlement |
 | `PAYPAL_NEGATIVE_TESTING` | `false` | Shows the "Test a failure" menu |
 | `PAYPAL_SELLER_RECEIVER` | placeholder | Receiver for seller payouts (one account for all sellers in the demo) |

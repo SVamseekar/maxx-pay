@@ -116,19 +116,35 @@ def test_address_then_shipment_pays_the_seller_once_with_the_fee_taken(market):
     assert chosen.status_code == 200 and chosen.json()["status"] == "AWAITING_SHIPMENT"
     seen = market.seller.get("/seller/orders").json()[0]
     assert seen["address"]["name"] == "Bea Buyer" and seen["address"]["city"] == "Leeds"
-    assert seen["your_share"] == "95.00"
+    assert seen["your_share"] == "92.00"
     shipped = ship(market)
     assert shipped.status_code == 200 and shipped.json()["status"] == "SHIPPED"
     payout = payout_for(market.order["id"])
-    assert payout["status"] == "SENT" and Decimal(payout["net_amount"]) == Decimal("95.00")
+    assert payout["status"] == "SENT" and Decimal(payout["net_amount"]) == Decimal("92.00")
     assert payout["receiver"] == "pay@shop.example" and payout["simulated"]
     assert ship(market).status_code == 409  # cannot be shipped twice, so cannot be paid twice
     books = market.buyer.get("/money/blocs/demo-success/ledger").json()
     assert books["reconciled"] is True and books["held_for_shipping"] == "0.00"
-    assert Decimal(books["seller_payouts"]) == Decimal("95.00")
+    assert Decimal(books["seller_payouts"]) == Decimal("92.00")
     view = market.buyer.get("/orders").json()[0]
     assert view["tracking"] == "1Z999AA10123456784" and view["has_address"] is True
     assert "Market Road" not in str(view)  # addresses never come back to lists
+
+
+def test_books_show_paypal_fees_paid_out_of_the_maxx_fee(market):
+    market.run()
+    address_id = market.address()
+    market.buyer.post(f"/orders/{market.order['id']}/address", json={"address_id": address_id})
+    assert ship(market).status_code == 200
+    books = market.buyer.get("/money/blocs/demo-success/ledger").json()
+    # The simulator charges the US sandbox rates: 3.49% + $0.49 on the $100 capture.
+    assert books["platform_fee"] == "8.00" and books["paypal_capture_fees"] == "3.98"
+    assert books["paypal_payout_fees"] == "0.00"  # PayPal has not reported the payout item yet
+    assert asyncio.run(fulfilment.refresh_payouts()) == 1
+    assert payout_for(market.order["id"])["paypal_fee"] == Decimal("0.25")
+    books = market.buyer.get("/money/blocs/demo-success/ledger").json()
+    assert books["paypal_payout_fees"] == "0.25" and books["maxx_margin"] == "3.77"
+    assert books["reconciled"] is True  # PayPal's fees never change the seller's share
 
 
 def test_a_seller_who_does_not_ship_to_that_country_is_refused(market):
@@ -245,7 +261,7 @@ def test_a_problem_after_shipping_pauses_nothing_already_paid_but_a_refund_is_re
     assert agreed.status_code == 200 and agreed.json()["status"] == "RESOLVED_REFUNDED"
     assert ledger.by_order(market.hold_id)["status"] == "REFUNDED"
     assert orders.get_order(market.order["id"])["status"] == "REFUNDED"
-    assert orders.owed_by(market.code) == Decimal("95.00")  # paid out earlier, so owed back
+    assert orders.owed_by(market.code) == Decimal("92.00")  # paid out earlier, so owed back
 
 
 def test_what_a_seller_owes_is_taken_from_the_next_payout(market, runtime):
@@ -259,7 +275,7 @@ def test_what_a_seller_owes_is_taken_from_the_next_payout(market, runtime):
         json={"kind": "not_as_described", "message": "It is a different model from the listing."},
     ).json()["case_id"]
     market.seller.post(f"/seller/cases/{case}/refund")
-    assert orders.owed_by(market.code) == Decimal("95.00")
+    assert orders.owed_by(market.code) == Decimal("92.00")
     # A second sale from another Bloc: its payout first repays the debt.
     with TestClient(app) as second:
         sign_up(second, "buyer2@example.com", "Cy Buyer")

@@ -240,6 +240,9 @@ payments = Table(
     Column("created_at", BigInteger, nullable=False),
     Column("updated_at", BigInteger, nullable=False),
     Column("address_id", String(36), nullable=True),
+    # What PayPal kept on the capture (seller_receivable_breakdown.paypal_fee). Maxx pays it out of
+    # its own fee; NULL until PayPal reports it.
+    Column("paypal_fee", Numeric(12, 2), nullable=True),
 )
 paypal_events = Table(
     "paypal_events",
@@ -280,6 +283,8 @@ payouts = Table(
     Column("attempt", Integer, nullable=False, default=1),
     Column("failure_reason", String(120), nullable=False, default=""),
     Column("item_checked_at", BigInteger, nullable=True),
+    # What PayPal charged Maxx to send this payout item (payout_item_fee). NULL until reported.
+    Column("paypal_fee", Numeric(12, 2), nullable=True),
 )
 settlements = Table(
     "settlements",

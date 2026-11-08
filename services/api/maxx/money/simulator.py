@@ -25,6 +25,17 @@ def _id(kind: str) -> str:
     return f"SIM-{kind}-{secrets.token_hex(6).upper()}"
 
 
+# PayPal's fees as seen in the US sandbox on 8 Nov 2026: 3.49% + $0.49 per capture and $0.25 per
+# payout item. Real rates depend on the merchant's country and plan; the sandbox reports its own.
+CAPTURE_FEE_RATE = Decimal("0.0349")
+CAPTURE_FEE_FIXED = Decimal("0.49")
+PAYOUT_ITEM_FEE = Decimal("0.25")
+
+
+def capture_fee(amount: Decimal | str) -> str:
+    return money(Decimal(amount) * CAPTURE_FEE_RATE + CAPTURE_FEE_FIXED)
+
+
 def _payout_outcome(receiver: str) -> str:
     """Like PayPal's sandbox, a payout to an address with no account stays unclaimed; these
     reserved test domains let tests and demos see the failure paths."""
@@ -149,7 +160,11 @@ class SimulatedPayPal:
             self._write(capture["id"], capture)
             order["status"] = "COMPLETED"
             self._write(order_id, order)
-            return {"capture_id": capture["id"], "status": "COMPLETED"}
+            return {
+                "capture_id": capture["id"],
+                "status": "COMPLETED",
+                "paypal_fee": capture_fee(order["amount"]),
+            }
 
         return self._once(request_id, make)
 
@@ -190,7 +205,11 @@ class SimulatedPayPal:
             auth["captured"] = money(Decimal(auth["captured"]) + Decimal(money(amount)))
             auth["status"] = "CAPTURED" if final_capture else "PARTIALLY_CAPTURED"
             self._write(authorization_id, auth)
-            return {"capture_id": capture["id"], "status": "COMPLETED"}
+            return {
+                "capture_id": capture["id"],
+                "status": "COMPLETED",
+                "paypal_fee": capture_fee(amount),
+            }
 
         return self._once(request_id, make)
 
@@ -270,6 +289,10 @@ class SimulatedPayPal:
                 "sender_item_id": item.get("sender_item_id", ""),
                 "status": item.get("status", "SUCCESS"),
                 "error": "RECEIVER_UNREGISTERED" if item.get("status") == "UNCLAIMED" else "",
+                # PayPal charges only for an item that was paid.
+                "fee": money(PAYOUT_ITEM_FEE)
+                if item.get("status", "SUCCESS") == "SUCCESS"
+                else None,
             }
             for item in batch["items"]
         ]

@@ -30,6 +30,19 @@ def money(value: Decimal | str) -> str:
     return str(Decimal(value).quantize(CENTS))
 
 
+def fee_value(block: dict | None) -> str | None:
+    """PayPal's own fee from a `{currency, value}` block, or None when PayPal did not report one."""
+    try:
+        return money(str((block or {})["value"]))
+    except (KeyError, TypeError, ArithmeticError):
+        return None
+
+
+def capture_fee(capture: dict) -> str | None:
+    """The fee PayPal kept on a capture (`seller_receivable_breakdown.paypal_fee`)."""
+    return fee_value((capture.get("seller_receivable_breakdown") or {}).get("paypal_fee"))
+
+
 class PayPalError(Exception):
     """A PayPal call failed. `name` is PayPal's error name (for example INSTRUMENT_DECLINED)."""
 
@@ -157,7 +170,11 @@ class PayPalClient:
     async def capture_order(self, order_id: str, request_id: str) -> dict:
         order = await self._call("POST", f"/v2/checkout/orders/{order_id}/capture", {}, request_id)
         capture = order["purchase_units"][0]["payments"]["captures"][0]
-        return {"capture_id": capture["id"], "status": capture["status"]}
+        return {
+            "capture_id": capture["id"],
+            "status": capture["status"],
+            "paypal_fee": capture_fee(capture),
+        }
 
     async def capture_authorization(
         self,
@@ -182,7 +199,11 @@ class PayPalClient:
             request_id,
             mock,
         )
-        return {"capture_id": capture["id"], "status": capture.get("status", "COMPLETED")}
+        return {
+            "capture_id": capture["id"],
+            "status": capture.get("status", "COMPLETED"),
+            "paypal_fee": capture_fee(capture),
+        }
 
     async def refund_capture(
         self, capture_id: str, amount: Decimal, request_id: str, note: str = ""
@@ -252,6 +273,7 @@ class PayPalClient:
                 "sender_item_id": str((item.get("payout_item") or {}).get("sender_item_id", "")),
                 "status": str(item.get("transaction_status", "")),
                 "error": str((item.get("errors") or {}).get("name", "")),
+                "fee": fee_value(item.get("payout_item_fee")),
             }
             for item in batch.get("items") or []
         ]

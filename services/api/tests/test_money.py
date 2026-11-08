@@ -161,6 +161,35 @@ def test_cleared_bloc_captures_only_the_winning_price_and_holds_it_for_shipping(
         assert receipt["status"] == "CAPTURED" and Decimal(receipt["saved"]) >= 0
 
 
+def test_a_second_unapproved_order_for_the_same_join_is_dropped(runtime):
+    """Two hold requests racing (a double click, React's dev double effect) both create a PayPal
+    order. Found on real sandbox 8 Nov: the unapproved one stayed CREATED, counted as a hold and
+    showed in place of the real one. Once one is authorized, the other is replaced and hidden."""
+    with TestClient(app) as client:
+        user = sign_up(client)
+        bloc = runtime.store.get("demo-failure")
+        first = client.post(f"/money/blocs/{bloc.id}/hold", json={"max_price": "150"})
+        order_id = first.json()["order_id"]
+        # The racing request passed the reuse check before the first one was saved.
+        racing = ledger.new_payment(
+            "hold",
+            "RACING-ORDER",
+            Decimal("150"),
+            True,
+            user_id=user["id"],
+            bloc_id=bloc.id,
+            generation=bloc.generation,
+        )
+        assert client.post(f"/money/holds/{order_id}/simulate-approve").status_code == 200
+        assert client.post(f"/money/holds/{order_id}/authorize").status_code == 200
+        assert ledger.get(racing["id"])["status"] == "FAILED"
+        assert ledger.get(racing["id"])["error"] == "replaced"
+        books = finish(client, "demo-failure")
+        assert books["holds"] == 1 and books["voided_count"] == 1 and books["failed_count"] == 0
+        receipts = [r for r in client.get("/money/receipts").json() if r["bloc_id"] == bloc.id]
+        assert [r["paypal"]["order"] for r in receipts] == [order_id]
+
+
 def test_settlement_is_idempotent(runtime):
     with TestClient(app) as client:
         sign_up(client)
@@ -309,6 +338,54 @@ def make_client(handler):
     return PayPalClient(
         "https://api-m.sandbox.paypal.com", "id", "secret", httpx.MockTransport(handler)
     )
+
+
+def test_real_client_reads_paypal_fees_from_captures_and_payout_items():
+    def handler(request: httpx.Request):
+        path = request.url.path
+        if path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3000})
+        if path.endswith("/capture"):
+            # Shape copied from a real US sandbox capture of $7.00 on 8 Nov 2026.
+            return httpx.Response(
+                201,
+                json={
+                    "id": "5TF33275CH350591T",
+                    "status": "COMPLETED",
+                    "seller_receivable_breakdown": {
+                        "gross_amount": {"currency_code": "USD", "value": "7.00"},
+                        "paypal_fee": {"currency_code": "USD", "value": "0.73"},
+                        "net_amount": {"currency_code": "USD", "value": "6.27"},
+                    },
+                },
+            )
+        if path.startswith("/v1/payments/payouts/"):
+            return httpx.Response(
+                200,
+                json={
+                    "batch_header": {"payout_batch_id": "PXH75SXCFLCY8"},
+                    "items": [
+                        {
+                            "payout_item_id": "J4JZQTZ2S4RFC",
+                            "transaction_status": "SUCCESS",
+                            "payout_item_fee": {"currency": "USD", "value": "0.25"},
+                            "payout_item": {"sender_item_id": "check-2"},
+                        },
+                        {"payout_item_id": "X2", "transaction_status": "PENDING"},
+                    ],
+                },
+            )
+        raise AssertionError(path)
+
+    pp = make_client(handler)
+
+    async def go():
+        capture = await pp.capture_authorization("AUTH1", Decimal("7"), "cap-fee-1")
+        return capture, await pp.get_payout_batch("PXH75SXCFLCY8")
+
+    capture, items = asyncio.run(go())
+    assert capture["paypal_fee"] == "0.73"
+    assert items[0]["fee"] == "0.25" and items[1]["fee"] is None
 
 
 def test_real_client_sends_idempotent_authorize_and_partial_capture(monkeypatch):

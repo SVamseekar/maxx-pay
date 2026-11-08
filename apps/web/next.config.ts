@@ -2,8 +2,9 @@ import { loadEnvConfig } from "@next/env";
 import path from "node:path";
 import type { NextConfig } from "next";
 
-// One root .env for the monorepo; API_BASE_URL stays server-only.
-loadEnvConfig(path.resolve(process.cwd(), "../.."));
+// One root .env for the monorepo; API_BASE_URL stays server-only. Next has already loaded
+// apps/web's own env by now and caches it, so without forceReload this call does nothing.
+loadEnvConfig(path.resolve(process.cwd(), "../.."), undefined, undefined, true);
 const secure = (process.env.PUBLIC_BASE_URL ?? "").startsWith("https://");
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },

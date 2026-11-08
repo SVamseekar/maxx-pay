@@ -624,6 +624,8 @@ def apply_payout_item(batch_id: str, item: dict) -> str:
         "item_status": status[:20],
         "item_checked_at": int(time.time()),
     }
+    if item.get("fee") is not None:
+        fields["paypal_fee"] = item["fee"]
     failed = status in PAYOUT_FAILED
     if failed and row["status"] != "FAILED":
         fields.update(status="FAILED", failure_reason=(item.get("error") or status)[:120])

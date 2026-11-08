@@ -34,7 +34,7 @@ export default function Questions() {
     ]},
 {id:"sellers",title:"Selling",items:[
       { q: "How do I sell?", a: "Apply with your trader details, confirm your payout PayPal email with a code, then publish a standing offer for a product: units, a floor price you will never go below, an opening price and a negotiating style." },
-      { q: "What does it cost?", a: `${SITE.feePercent}% of each sale, taken from your payout. No listing or monthly fees.` },
+      { q: "What does it cost?", a: `${SITE.feePercent}% of each sale, taken from your payout. Maxx pays PayPal’s processing and payout fees out of that. No listing or monthly fees.` },
       { q: "When am I paid?", a: "When you mark an order shipped with a tracking number. A newly changed payout address may wait before it is paid." },
       { q: "Is Maxx responsible for shipping or returns?", a: "No. You are the seller of record and responsible for the goods, shipping, returns, warranties, customer service and taxes. See the Seller Agreement." },
       { q: "What are strikes?", a: "Orders you do not ship in time and problem reports you do not answer in 24 hours earn a strike and cause a refund. Three strikes suspend your account." },

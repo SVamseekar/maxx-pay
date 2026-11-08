@@ -153,6 +153,16 @@ async def authorize_hold(store, user_id: str, order_id: str) -> tuple[Bloc, dict
         raise _fail("The Bloc changed while you joined. Your hold was released; try again.")
     member = next(m for m in bloc.members if m.user_id == user_id and m.status == "HELD")
     ledger.update_payment(payment["id"], member_id=member.id)
+    # Two racing hold requests (a double click) can each create an order. Only one can be the
+    # join; the other was never approved and holds no money, so retire it.
+    for other in ledger.for_bloc(bloc.id, payment["generation"]):
+        if (
+            other["id"] != payment["id"]
+            and other["kind"] == "hold"
+            and other["user_id"] == user_id
+            and other["status"] in {"CREATED", "APPROVED"}
+        ):
+            ledger.update_payment(other["id"], status="FAILED", error="replaced")
     audit.record(f"user:{user_id[:8]}", "hold.placed", payment["id"], f"{payment['max_amount']}")
     return bloc, ledger.get(payment["id"])
 
@@ -332,6 +342,7 @@ async def settle_bloc(store, bloc_id: str) -> dict:
                     status="CAPTURED",
                     capture_id=capture["capture_id"],
                     captured_amount=amount,
+                    paypal_fee=capture.get("paypal_fee"),
                 )
                 outcome["captured"] += 1
                 audit.record("system", "payment.captured", payment["id"], str(amount))
@@ -436,6 +447,20 @@ async def release_orphans(store) -> int:
     return released
 
 
+def placed(payment: dict) -> bool:
+    """False for a hold that never got past the order: still waiting for the buyer's approval, or
+    abandoned (cancelled, replaced by a racing request, Bloc closed first). No money was ever held,
+    so it is not a hold in the books or a receipt. A declined authorization still counts: the buyer
+    tried, and PayPal said no."""
+    if payment["kind"] != "hold" or payment["authorization_id"]:
+        return True
+    return payment["status"] == "FAILED" and payment["error"] not in {
+        "cancelled",
+        "replaced",
+        "bloc_closed",
+    }
+
+
 def payout_rows(bloc_id: str, generation: int | None = None) -> list[dict]:
     query = select(schema.payouts).where(schema.payouts.c.bloc_id == bloc_id)
     if generation is not None:
@@ -449,7 +474,9 @@ def reconcile(bloc_id: str, generation: int | None = None) -> dict:
     being held until the seller ships. Refunded money is accounted for separately."""
     from maxx.fulfilment import store as fulfilment
 
-    payments = [p for p in ledger.for_bloc(bloc_id, generation) if p["kind"] == "hold"]
+    payments = [
+        p for p in ledger.for_bloc(bloc_id, generation) if p["kind"] == "hold" and placed(p)
+    ]
     payouts = payout_rows(bloc_id, generation)
     orders = [
         o
@@ -478,6 +505,21 @@ def reconcile(bloc_id: str, generation: int | None = None) -> dict:
         if p["id"] in ordered_payments and ordered_payments[p["id"]] not in paid_orders
     ]
     captured_total = total(captured, "captured_amount")
+
+    def known(rows, key):
+        return [r for r in rows if r.get(key) is not None]
+
+    # PayPal's own fees come out of the Maxx fee, not the seller's share. A fee PayPal has not
+    # reported yet is counted as unknown rather than guessed.
+    paid_out = [p for p in sent if p["status"] == "SENT"]
+    capture_fees = total(known(captured, "paypal_fee"), "paypal_fee")
+    payout_fees = total(known(paid_out, "paypal_fee"), "paypal_fee")
+    fees_unknown = sum(r.get("paypal_fee") is None and not r["simulated"] for r in captured)
+    fees_unknown += sum(
+        r.get("paypal_fee") is None and r["method"] == "paypal" and not r["simulated"]
+        for r in paid_out
+    )
+    platform_fee = total(live, "fee_amount")
     grouped: dict[str, dict] = {}
     for row in live:
         seller = grouped.setdefault(
@@ -509,7 +551,11 @@ def reconcile(bloc_id: str, generation: int | None = None) -> dict:
         "refunded_count": len(refunded),
         "refunded_total": str(total(refunded, "captured_amount")),
         "failed_count": sum(p["status"] in {"CAPTURE_FAILED", "FAILED"} for p in payments),
-        "platform_fee": str(total(live, "fee_amount")),
+        "platform_fee": str(platform_fee),
+        "paypal_capture_fees": str(capture_fees),
+        "paypal_payout_fees": str(payout_fees),
+        "paypal_fees_unknown": fees_unknown,
+        "maxx_margin": str((platform_fee - capture_fees - payout_fees).quantize(CENTS)),
         "seller_payouts": str(total(sent, "net_amount")),
         "held_for_shipping": str(total(waiting, "captured_amount")),
         "payouts": [

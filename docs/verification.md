@@ -5,12 +5,39 @@ at the end. Fixture and replay results are kept apart from live results.
 
 ## Automated tests
 
-- **API:** 555 tests pass (1 skipped). They cover the auction engine's invariants, the money
+- **API:** 558 tests pass (1 skipped). They cover the auction engine's invariants, the money
   ledger, the role contracts for every model, the price-search trust rules, accounts and sign-in,
   the PayPal simulator, seller onboarding, fulfilment and the email layout. Provider calls in tests
   use mock transports.
 - **Web:** ESLint, TypeScript and 51 unit tests pass.
 - Run them with `make check`.
+
+## Real PayPal sandbox, through the app: 8 November 2026
+
+Run locally with `PAYPAL_MODE=sandbox`, a US sandbox business account as the platform and a US
+sandbox personal account as the buyer. A headless Chrome drove the app the way a person does: a
+private copy of each demo scenario, **Join with a PayPal hold**, sign-in and approval in PayPal's
+own popup, **Close Bloc & negotiate** with live Nemotron agents, a delivery address, and the
+simulated seller shipping with simulated tracking. Every PayPal call was real.
+
+| Step | Result | PayPal ids |
+|---|---|---|
+| Hold | $170.00 authorized | order `2CL35057632099428`, authorization `3FW33047PT236334B` |
+| Negotiation | Allocated at $138.00 (451 of 601 buyers served) | |
+| Capture | $138.00 of the $170.00 hold, final capture; the other $32.00 released. PayPal fee $5.31 (3.49% + $0.49), read from the capture response | capture `5HY848385T833710G` |
+| Payout on delivery | $126.96 to the seller (92%); Maxx fee $11.04 (8%). Item SUCCESS, PayPal payout fee $0.25 | batch `UQ9WKHH4YU2Y2`, item `KMBHZV8MCJ4HU` |
+| Books | Reconciled. Maxx keeps $11.04 − $5.31 − $0.25 = $5.48. No PayPal fee left unknown. | |
+| No-deal scenario | $170.00 hold voided, nothing captured | order `8MK87314SL881341D`, authorization `0G311446KP156490S` |
+
+Two bugs found by the run and fixed, each with a test:
+
+- The page's Content-Security-Policy left PayPal out, so the approval popup could not load. The
+  web app never read the root `.env`: Next.js had already cached its own env, so the second
+  `loadEnvConfig` call did nothing. It now forces the reload.
+- Two hold requests racing (a double click, or React's double effect in development) each created
+  a PayPal order. The unapproved one stayed in the books as a hold and showed in place of the real
+  one. When a hold is authorized, any other unapproved order for the same join is now retired, and
+  orders that never held money are left out of the books and receipts.
 
 ## Live on the hosted demo: 30 October 2026
 
@@ -78,5 +105,7 @@ These measure the app's own plumbing and rules, not model accuracy:
 - Screenshot-reading accuracy on a large, representative set of real carts (the plan was 40
   images), and product-match precision at scale.
 - Negotiation quality and savings over many live runs.
-- Real PayPal sandbox, Stripe Identity and EasyPost calls: these run in labelled simulators.
+- PayPal webhooks against the sandbox: they need a public API address, so the run above relied on
+  the app reading each status back from PayPal.
+- Real Stripe Identity and EasyPost calls: these run in labelled simulators.
 - Database backup and restore on the hosted database.
