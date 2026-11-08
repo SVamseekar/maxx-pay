@@ -3,7 +3,7 @@
 # A free instance stops after 15 idle minutes; pages wake it and show a banner while it starts.
 services:
   - type: web
-    name: maxx-api
+    name: maxx-pay-api
     runtime: docker
     plan: free
     dockerfilePath: ./deploy/Dockerfile.api
@@ -33,11 +33,24 @@ services:
         value: "0.15"
       - key: AI_ANONYMOUS_DAILY_BUDGET_USD
         value: "0.30"
-      # The demo money and seller tour run on the labelled simulators.
+      # Real PayPal sandbox: holds, captures, voids and payouts. Live payments are refused.
       - key: PAYPAL_MODE
-        value: simulator
+        value: sandbox
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      # Payouts go here; it must be a different sandbox account from the one the app belongs to.
+      - key: PAYPAL_SELLER_RECEIVER
+        sync: false
+      # Production refuses to start without it, so webhook signatures can be verified.
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      # The seller tour runs only on the simulator, so it is off with real sandbox money.
       - key: DEMO_TOOLS
-        value: "true"
+        value: "false"
+      - key: AI_BUDGET_USD
+        value: "10"
       # Production refuses to start otherwise; the seller tour marks its demo shop as reviewed.
       - key: SELLER_REVIEW
         value: manual

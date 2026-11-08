@@ -315,6 +315,17 @@ def test_a_failed_subscription_payment_is_recorded_and_access_kept(runtime):
     assert "payment failed" in out["summary"]
 
 
+def test_a_payout_batch_still_processing_is_not_marked_failed(runtime):
+    out = webhooks.handle_event(
+        {
+            "id": "WH-PB-1",
+            "event_type": "PAYMENT.PAYOUTSBATCH.PROCESSING",
+            "resource": {"batch_header": {"payout_batch_id": "B1"}},
+        }
+    )
+    assert out["summary"] == "ignored"
+
+
 def test_webhook_cannot_raise_a_capture_above_the_hold(runtime):
     with TestClient(app) as client:
         sign_up(client)

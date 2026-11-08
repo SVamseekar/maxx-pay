@@ -73,7 +73,10 @@ def _apply(event_type: str, resource: dict) -> str:
         return fulfilment.apply_payout_item(batch, item)
     if event_type.startswith("PAYMENT.PAYOUTSBATCH."):
         batch = resource.get("batch_header", {}).get("payout_batch_id", resource_id)
-        status = "SENT" if event_type.endswith("SUCCESS") else "FAILED"
+        # PROCESSING and other in-between states change nothing; the items carry the outcome.
+        status = {"SUCCESS": "SENT", "DENIED": "FAILED"}.get(event_type.rsplit(".", 1)[1])
+        if status is None:
+            return "ignored"
         with engine.begin() as db:
             done = db.execute(
                 update(schema.payouts)
