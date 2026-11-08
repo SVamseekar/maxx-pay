@@ -222,3 +222,60 @@ def test_catalogue_creation_does_not_reuse_expired_open_bloc(runtime, monkeypatc
         assert runtime.store.get(expired.id).closes_at == 1000
         # Subsequent demand still groups into the new, joinable Bloc.
         assert client.post("/blocs", json=body).json()["id"] == fresh["id"]
+
+
+def settle(client, id):
+    import time
+
+    assert client.post(f"/blocs/{id}/start").status_code == 202
+    for _ in range(200):
+        b = client.get(f"/blocs/{id}").json()
+        if b["status"] in ["SETTLED", "FAILED"]:
+            return b
+        time.sleep(0.01)
+    raise AssertionError("negotiation did not finish")
+
+
+def test_an_unserved_buyer_can_open_a_new_bloc_for_the_same_product(runtime):
+    with TestClient(app) as client:
+        sign_up(client)
+        assert client.post("/blocs/demo-success/again").status_code == 409  # still open
+        assert client.post("/blocs/demo-success/join", json={"max_price": "101"}).status_code == 200
+        b = settle(client, "demo-success")
+        you = next(m for m in b["members"] if m["user_id"] == "me")
+        assert you["status"] == "BELOW_CLEARING"
+        assert b["outcome"]["reasons"][you["id"]] == "below_price"
+        # A demo scenario gives a private copy, the same one each time until it closes.
+        again = client.post("/blocs/demo-success/again")
+        assert again.status_code == 200, again.text
+        copy = again.json()["bloc_id"]
+        assert copy.startswith("lab-success-")
+        assert client.post("/blocs/demo-success/again").json()["bloc_id"] == copy
+        fresh = client.get(f"/blocs/{copy}").json()
+        assert fresh["status"] == "OPEN" and fresh["title"] == b["title"]
+        with TestClient(app) as stranger:
+            sign_up(stranger, "stranger@example.com")
+            assert stranger.post("/blocs/demo-success/again").status_code == 403
+
+
+def test_a_new_bloc_for_a_demand_product_reuses_an_open_one(runtime):
+    old = make_bloc("old", "Exact Speaker Blue", Decimal("100"))
+    open_one = make_bloc("open", "Exact Speaker Blue", Decimal("100"))
+    runtime.store.create(old)
+    runtime.store.create(open_one)
+    with TestClient(app) as client:
+        sign_up(client)
+        assert client.post("/blocs/old/join", json={"max_price": "51"}).status_code == 200
+        b = settle(client, "old")
+        you = next(m for m in b["members"] if m["user_id"] == "me")
+        assert you["status"] != "WIN"
+        assert client.post("/blocs/old/again").json()["bloc_id"] == "open"
+        # With no open Bloc left for the product, a new one is opened for it.
+        closed = runtime.store.get("open")
+        transition(closed, "NEGOTIATING")
+        runtime.store.save(closed)
+        made = client.post("/blocs/old/again").json()["bloc_id"]
+        assert made not in {"old", "open"}
+        fresh = client.get(f"/blocs/{made}").json()
+        assert fresh["status"] == "OPEN" and fresh["product_key"] == b["product_key"]
+        assert fresh["viewer_is_owner"] is True

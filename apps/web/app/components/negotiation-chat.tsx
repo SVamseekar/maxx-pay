@@ -72,7 +72,7 @@ function ConversationEntry({ group, events, stream, onStream }: EntryProps) {
     return <div className="chat-reply"><Sender name="Allocation check" role="Deterministic" detail={`Round ${group.round}`} /><Body text={text} stream={stream} onStream={onStream} /></div>;
   }
   if (group.kind === "negotiator_fallback") return <div className="chat-reply chat-exception"><Sender name="Negotiator update" detail={`Round ${group.round}`} /><Body text={event.data.message ?? "Negotiator unavailable; using the fixed rule for this round."} stream={stream} onStream={onStream} /></div>;
-  const text = group.kind === "seller_withdrew" ? `Seller ${event.data.seller} withdrew. Their offer is excluded from the negotiation.` : group.kind === "seller_unavailable" ? `Seller ${event.data.seller} is unavailable. Continuing with the remaining sellers.` : "A provider call failed. Retrying once.";
+  const text = group.kind === "seller_withdrew" ? `Seller ${event.data.seller} withdrew. Their offer is excluded from the negotiation.` : group.kind === "seller_unavailable" ? `Seller ${event.data.seller} is unavailable. Continuing with the remaining sellers.` : group.kind === "seller_skipped" ? `Seller ${event.data.seller} gave no valid answer this round. Its last offer stands, and it is asked again next round.` : "A provider call failed. Retrying once.";
   return <div className="chat-reply chat-exception"><Sender name={group.kind === "provider_retry" ? "Connection update" : "Seller update"} detail={`Round ${group.round}`} /><Body text={text} stream={stream} onStream={onStream} /></div>;
 }
 

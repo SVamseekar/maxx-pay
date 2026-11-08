@@ -8,7 +8,7 @@ export type ConversationGroup = {
 };
 const visibleEvents = new Set([
   "round_start", "reserve_set", "negotiator_message", "seller_offer",
-  "seller_withdrew", "seller_unavailable", "provider_retry", "tentative_allocation",
+  "seller_withdrew", "seller_unavailable", "seller_skipped", "provider_retry", "tentative_allocation",
   "negotiator_fallback",
 ]);
 
@@ -38,6 +38,7 @@ export function previousOfferPrice(events: BlocEvent[], seller: string | undefin
     if (event.id >= beforeId) break;
     if (event.data.seller !== seller) continue;
     if (event.type === "seller_offer" && event.data.price !== undefined) price = Number(event.data.price);
+    // A skipped seller's last offer stands, so its price carries on.
     else if (event.type === "seller_withdrew" || event.type === "seller_unavailable") price = null;
   }
   return price !== null && Number.isFinite(price) ? price : null;

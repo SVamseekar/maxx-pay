@@ -45,6 +45,13 @@ class Allocation(Contract):
 class Clearing(Contract):
     allocations: list[Allocation] = Field(default_factory=list)
     unserved: list[str] = Field(default_factory=list)
+    # The run's receipt. Every offer here was already shown in the room as it was made.
+    offers: list[Offer] = Field(default_factory=list)
+    # Why each unserved buyer missed out: their maximum was below every offer (below_price), or
+    # offers they could afford were taken by higher maximums first (sold_out).
+    reasons: dict[str, Literal["below_price", "sold_out"]] = Field(default_factory=dict)
+    withdrew: list[str] = Field(default_factory=list)
+    above_reserve: list[str] = Field(default_factory=list)
 
 
 class Seller(Contract):

@@ -65,6 +65,47 @@ def test_withdrawal_reclears_without_withdrawn_seller(tmp_path):
     assert all(a.seller_id != "A" for a in b.outcome.allocations)
 
 
+def test_clearing_explains_why_each_unserved_buyer_missed_out():
+    from maxx.negotiate.contracts import Member, Offer
+    from maxx.negotiate.engine import clear
+
+    members = [
+        Member(id="rich", user_id="r", max_price="200", joined_order=0),
+        Member(id="late", user_id="l", max_price="160", joined_order=1),
+        Member(id="low", user_id="w", max_price="100", joined_order=2),
+    ]
+    offers = [
+        Offer(seller_id="A", price="150", max_qty=1),
+        Offer(seller_id="B", price="180", max_qty=5),
+    ]
+    result = clear(members, offers)
+    assert [(a.member_id, a.seller_id) for a in result.allocations] == [("rich", "A")]
+    # "late" could afford A's price, but A's one unit went to a higher maximum first.
+    assert result.reasons == {"late": "sold_out", "low": "below_price"}
+    assert result.offers == offers
+
+
+def test_a_seller_that_breaks_its_contract_misses_one_round_and_keeps_its_offer(tmp_path):
+    class OneBadRound(FixtureAdapter):
+        async def seller(self, context):
+            if context["seller_id"] == "A" and context["round"] == 2:
+                raise TimeoutError("out of contract")
+            return await super().seller(context)
+
+    store = setup_bloc(tmp_path)
+    asyncio.run(run_negotiation(store, "test", OneBadRound(), round_delay=0))
+    b = store.get("test")
+    skipped = [e for e in b.events if e.type == "seller_skipped"]
+    assert [(e.data["seller"], e.data["round"]) for e in skipped] == [("A", 2)]
+    assert not any(e.data.get("seller") == "A" for e in b.events if e.type == "seller_withdrew")
+    # Back at the table the next round, with a fresh offer.
+    assert any(
+        e.type == "seller_offer" and e.data["seller"] == "A" and e.data["round"] == 3
+        for e in b.events
+    )
+    assert "A" not in b.outcome.withdrew
+
+
 def test_bounded_retries_and_all_provider_failure_release(tmp_path):
     class Broken(FixtureAdapter):
         attempts = 0

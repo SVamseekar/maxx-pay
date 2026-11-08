@@ -519,6 +519,43 @@ async def start_bloc(id: str, runtime: RuntimeDep, user: CurrentUser):
         raise HTTPException(409, str(exc)) from None
 
 
+@router.post("/blocs/{id}/again")
+def bloc_again(id: str, runtime: RuntimeDep, user: CurrentUser):
+    """For a buyer this Bloc did not serve: an open Bloc for the same product, so they can join
+    again with a limit they choose. Nothing is joined or held here; the buyer still sets their
+    maximum and approves a new hold. Demo scenarios give the person's own private copy."""
+    b = get_bloc(runtime, id)
+    if b.status not in {"SETTLED", "FAILED"}:
+        raise HTTPException(409, "This Bloc has not finished yet.")
+    mine = [m for m in b.members if m.user_id == user.id and m.status != "LEFT"]
+    if not mine:
+        raise HTTPException(403, "Only buyers in this Bloc can join a new one from here.")
+    if any(m.status == "WIN" for m in mine):
+        raise HTTPException(409, "You were served in this Bloc.")
+    ratelimit.hit(f"bloc:{user.id}", settings.bloc_actions_per_hour, 3600)
+    if b.id.startswith(SCENARIO_PREFIXES):
+        from maxx.demo.routes import lab_copy
+
+        return {"bloc_id": lab_copy(runtime, user.id, b.scenario)}
+    now = int(time.time())
+    for existing in runtime.store.list():
+        if (
+            existing.id != b.id
+            and existing.product_key == b.product_key
+            and existing.status == "OPEN"
+            and (not existing.closes_at or existing.closes_at > now)
+        ):
+            return {"bloc_id": existing.id}
+    fresh = make_bloc(str(uuid.uuid4()), b.title, b.typical_price, mode=runtime.mode)
+    fresh.product_key, fresh.owner_id = b.product_key, user.id
+    # The same product's checked prices, until they expire like any other Bloc's.
+    fresh.market_rows, fresh.market_mode = b.market_rows, b.market_mode
+    fresh.market_checked_at, fresh.market_expires_at = b.market_checked_at, b.market_expires_at
+    fresh.target_price = b.target_price
+    runtime.store.create(fresh)
+    return {"bloc_id": fresh.id}
+
+
 @router.get("/blocs/{id}/stream")
 async def stream_bloc(
     id: str, request: Request, runtime: RuntimeDep, after: Annotated[int, Query(ge=0)] = 0

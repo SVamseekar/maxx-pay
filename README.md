@@ -72,7 +72,9 @@ caps stop runaway spend.
 - **Scan → verdict:** screenshot upload, editable fields, Money Score (0–100), one recommended move,
   and links to the offers found.
 - **Blocs and negotiation:** commitments with a maximum price, a countdown, live streamed rounds,
-  partial fills, and a clear outcome for every member.
+  partial fills, and a clear outcome for every member: a receipt of who was served and why the
+  others were not, and for an unserved buyer the prices that cleared and an optional new Bloc at a
+  limit they choose.
 - **Payments** (`PAYPAL_MODE=simulator` or `sandbox`): a PayPal hold on joining, capture of only
   the allocated price, release for everyone else, seller payouts, agentic checkout and PYUSD.
   See [payments](docs/payments.md).

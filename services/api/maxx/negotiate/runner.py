@@ -15,7 +15,7 @@ from maxx.negotiate.adapters import (
     seller_context,
 )
 from maxx.negotiate.blocs import emit, transition
-from maxx.negotiate.contracts import Bloc, Clearing
+from maxx.negotiate.contracts import Bloc, Clearing, Offer
 from maxx.negotiate.engine import clear
 from maxx.negotiate.store import BlocStore
 from maxx.providers import BudgetExceeded, ModelOutputError
@@ -30,6 +30,16 @@ def terminal_failure(bloc: Bloc, reason: str):
     bloc.failure_reason = reason
     transition(bloc, "FAILED")
     emit(bloc, "failed", reason=reason, simulated=True)
+
+
+def settle_round(members, offers, reserve: Decimal, withdrawn: set) -> Clearing:
+    """Clear one round's offers and keep the facts its receipt needs: who withdrew, and whose
+    offer was above the reserve and so left out."""
+    present = [o for o in offers if o is not None]
+    result = clear(members, [o for o in present if o.price <= reserve and o.max_qty])
+    result.withdrew = sorted(withdrawn)
+    result.above_reserve = sorted(o.seller_id for o in present if o.price > reserve)
+    return result
 
 
 def negotiation_owner(bloc: Bloc) -> str:
@@ -63,6 +73,7 @@ async def _negotiate(store, id, adapter, round_delay, deadline):
     feedback = {}
     withdrawn = set()
     last_price: dict[str, Decimal] = {}
+    standing: dict[str, Offer] = {}
     previous = {"served": 0, "unserved": sum(m.status == "HELD" for m in bloc.members)}
 
     def persist():
@@ -129,14 +140,16 @@ async def _negotiate(store, id, adapter, round_delay, deadline):
                 persist()
                 if plan.close:
                     # close() clears the current offers; never request another seller round.
-                    latest = clear(
-                        members,
-                        [o for o in offers if o is not None and o.price <= reserve and o.max_qty],
-                    )
+                    latest = settle_round(members, offers, reserve, withdrawn)
                     break
+                broke: list[str] = []
 
                 async def bid_for(
-                    seller, current_round=round, current_feedback=feedback, current_plan=plan
+                    seller,
+                    current_round=round,
+                    current_feedback=feedback,
+                    current_plan=plan,
+                    current_broke=broke,
                 ):
                     try:
                         if seller.account_id and seller.agent == "rules":
@@ -174,8 +187,10 @@ async def _negotiate(store, id, adapter, round_delay, deadline):
                                 offer, clamped = safe_offer(seller, bid)
                         if offer is not None:
                             last_price[seller.id] = offer.price
+                            standing[seller.id] = offer
                         if offer is None:
                             withdrawn.add(seller.id)
+                            standing.pop(seller.id, None)
                             emit(bloc, "seller_withdrew", round=current_round, seller=seller.id)
                         else:
                             emit(
@@ -191,16 +206,24 @@ async def _negotiate(store, id, adapter, round_delay, deadline):
                         persist()
                         return offer
                     except Exception:
-                        withdrawn.add(seller.id)
-                        emit(bloc, "seller_unavailable", round=current_round, seller=seller.id)
+                        # Out of contract (or unreachable) after its one retry: this seller misses
+                        # this round only. An offer it already made cannot be withdrawn, so its
+                        # last valid offer stands, and it is asked again next round.
+                        current_broke.append(seller.id)
+                        emit(
+                            bloc,
+                            "seller_skipped",
+                            round=current_round,
+                            seller=seller.id,
+                            message="No valid answer this round; its last offer stands.",
+                        )
                         persist()
-                        return None
+                        return standing.get(seller.id)
 
-                offers = await asyncio.gather(
-                    *(bid_for(s) for s in bloc.sellers if s.id not in withdrawn)
-                )
+                asked = [s for s in bloc.sellers if s.id not in withdrawn]
+                offers = await asyncio.gather(*(bid_for(s) for s in asked))
                 valid = [o for o in offers if o is not None and o.price <= reserve and o.max_qty]
-                latest = clear(members, valid)
+                latest = settle_round(members, offers, reserve, withdrawn)
                 average = (
                     sum(a.price for a in latest.allocations) / len(latest.allocations)
                     if latest.allocations
@@ -230,6 +253,10 @@ async def _negotiate(store, id, adapter, round_delay, deadline):
                 if delay:
                     await asyncio.sleep(delay)
                 if round == 5 or not (set(context["seller_ids"]) - withdrawn):
+                    break
+                if asked and len(broke) == len(asked):
+                    # Every seller failed at once: the provider is down, not one seller. Stop
+                    # asking; the offers already standing are cleared below.
                     break
             if not latest.allocations:
                 terminal_failure(bloc, "No qualifying deal. All simulated commitments released.")

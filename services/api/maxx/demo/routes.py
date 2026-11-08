@@ -46,19 +46,24 @@ def open_lab(scenario: str, runtime: RuntimeDep, user: CurrentUser):
     the seller tour; an unfinished copy is reused rather than duplicated."""
     if scenario not in DEMO_CROWD:
         raise HTTPException(404, "Not found.")
-    for bloc in runtime.store.list_for_user(user.id):
+    return {"bloc_id": lab_copy(runtime, user.id, scenario)}
+
+
+def lab_copy(runtime, user_id: str, scenario: str) -> str:
+    """The person's open private copy of a demo scenario, made if they have none."""
+    for bloc in runtime.store.list_for_user(user_id):
         if (
             bloc.id.startswith(f"lab-{scenario}-")
-            and bloc.owner_id == user.id
+            and bloc.owner_id == user_id
             and bloc.status == "OPEN"
             and bloc.closes_at > time.time()
         ):
-            return {"bloc_id": bloc.id}
-    ratelimit.hit(f"demo-lab:{user.id}", 12, 3600)
+            return bloc.id
+    ratelimit.hit(f"demo-lab:{user_id}", 12, 3600)
     ratelimit.hit("demo-lab:all", 600, 3600)
     tag = uuid.uuid4().hex[:12]
     bloc = runtime.scenario_bloc(f"lab-{scenario}-{tag}", scenario, runtime.mode)
-    bloc.product_key = f"demo-lab:{user.id[:8]}:{scenario}:{tag}"
-    bloc.owner_id = user.id
+    bloc.product_key = f"demo-lab:{user_id[:8]}:{scenario}:{tag}"
+    bloc.owner_id = user_id
     runtime.store.create(bloc)
-    return {"bloc_id": bloc.id}
+    return bloc.id

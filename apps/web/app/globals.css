@@ -172,3 +172,6 @@ html[data-motion=reduced] .depth-light,html[data-motion=reduced] .scan-sweep{dis
 @media(min-width:1101px){.room-grid{grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr)}}
 @media(max-width:800px){.chat-scroll{height:540px}.chat-offers-panel{min-height:591px}}
 @media(max-width:480px){.chat-tabs-bar{gap:2px;padding:6px}.chat-tabs-bar [role=tab]{font-size:12px;padding:8px;min-height:44px}.chat-actions{gap:0}.chat-actions button{width:34px;min-height:44px}.chat-connection{padding-inline:16px}.chat-scroll{padding:20px 17px 12px;height:510px}.chat-reply p{font-size:14px}.chat-offers-panel{padding:20px 16px;min-height:561px}.chat-offer-list>div{gap:6px;font-size:11px}.chat-search{padding-inline:12px;gap:6px}.chat-search input{font-size:16px}.chat-search>span{display:none}.chat-bottom{padding-inline:12px}}
+.price-rule{font-size:12px;color:var(--muted);margin:8px 0 0}
+.unserved-outcome .button{width:100%;margin:12px 0 4px;justify-content:center}
+.run-receipt table{width:100%;margin:12px 0;font-size:12px;border-collapse:collapse}.run-receipt th,.run-receipt td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}.run-receipt ul{padding-left:18px;font-size:12px}.run-receipt li{margin:6px 0}

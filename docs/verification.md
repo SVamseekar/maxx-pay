@@ -5,11 +5,11 @@ at the end. Fixture and replay results are kept apart from live results.
 
 ## Automated tests
 
-- **API:** 558 tests pass (1 skipped). They cover the auction engine's invariants, the money
+- **API:** 562 tests pass (1 skipped). They cover the auction engine's invariants, the money
   ledger, the role contracts for every model, the price-search trust rules, accounts and sign-in,
   the PayPal simulator, seller onboarding, fulfilment and the email layout. Provider calls in tests
   use mock transports.
-- **Web:** ESLint, TypeScript and 51 unit tests pass.
+- **Web:** ESLint, TypeScript and 55 unit tests pass.
 - Run them with `make check`.
 
 ## Real PayPal sandbox, through the app: 8 November 2026

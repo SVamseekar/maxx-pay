@@ -13,7 +13,7 @@ def clear(members: list[Member], offers: list[Offer]) -> Clearing:
         key=lambda m: (-m.max_price, m.joined_order, m.id),
     )
     os = sorted(offers, key=lambda o: (o.price, o.seller_id))
-    result = Clearing()
+    result = Clearing(offers=os)
     i = 0
     for offer in os:
         qty = offer.max_qty
@@ -24,4 +24,9 @@ def clear(members: list[Member], offers: list[Offer]) -> Clearing:
             qty -= 1
             i += 1
     result.unserved = [m.id for m in ms[i:]]
+    cheapest = os[0].price if os else None
+    result.reasons = {
+        m.id: "sold_out" if cheapest is not None and m.max_price >= cheapest else "below_price"
+        for m in ms[i:]
+    }
     return result

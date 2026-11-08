@@ -80,7 +80,21 @@ like "iPhone") must be in the input. Otherwise the fixed template is used and th
 the floor, never above the opening price, never above its own previous offer, never more than
 `SELLER_AI_MAX_ROUND_DROP_PERCENT` below it in one round, never more than stock. The floor always
 wins. A seller's note written as instructions to the model is not passed on at all. No seller ever
-sees another seller's data.
+sees another seller's data. A seller whose answer is still out of contract after its one retry (or
+that cannot be reached) misses that round only: its last valid offer stands, because an offer
+already made cannot be withdrawn, and it is asked again the next round. The room shows "gave no
+valid answer this round". A seller that answers `withdraw` leaves for the rest of the
+negotiation. If every seller fails in the same round, the provider is down: no more rounds are
+asked, and the offers already standing are cleared.
+
+**Clearing.** No model takes part. Highest maximums are matched to the cheapest offers first;
+equal maximums go to whoever joined first; each buyer pays their seller's price. The saved outcome
+keeps a receipt: each seller's final offer (price, units offered, units sold), which sellers
+withdrew or stayed above the reserve, and for each unserved buyer whether their maximum was below
+every offer or the offers they could afford sold out to higher maximums first. The room shows it
+under "How this run was decided", and a buyer who was not served sees their own reason, the
+prices that cleared, and an optional "Join a new Bloc with a higher limit" (they set the new limit
+and approve a new hold themselves).
 
 **Negotiator.** Each tool has an argument model with no extra fields. An unknown tool, a missing or
 extra argument, a reserve that is not a plain amount (`^\d{1,9}(\.\d{1,2})?$`), a seller id not in
