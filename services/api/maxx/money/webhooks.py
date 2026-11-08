@@ -39,6 +39,9 @@ def _apply(event_type: str, resource: dict) -> str:
     """Update the ledger from one verified event. Returns a short human summary."""
     resource_id = str(resource.get("id", ""))
     engine = storage.get_store().engine
+    if event_type == "BILLING.SUBSCRIPTION.PAYMENT.FAILED":
+        # PayPal retries the payment and sends SUSPENDED if it keeps failing, so access stays.
+        return "subscription payment failed; PayPal retries it"
     if event_type.startswith("BILLING.SUBSCRIPTION."):
         status = {
             "ACTIVATED": "ACTIVE",

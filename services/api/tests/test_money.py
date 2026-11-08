@@ -302,6 +302,19 @@ def test_webhooks_need_a_valid_signature_and_apply_once(runtime):
         )
 
 
+def test_a_failed_subscription_payment_is_recorded_and_access_kept(runtime):
+    # PayPal retries a failed payment and sends SUSPENDED if it keeps failing; until then the
+    # subscriber keeps Plus, and the failure is on record.
+    out = webhooks.handle_event(
+        {
+            "id": "WH-PF-1",
+            "event_type": "BILLING.SUBSCRIPTION.PAYMENT.FAILED",
+            "resource": {"id": "I-NOBODY"},
+        }
+    )
+    assert "payment failed" in out["summary"]
+
+
 def test_webhook_cannot_raise_a_capture_above_the_hold(runtime):
     with TestClient(app) as client:
         sign_up(client)
@@ -450,6 +463,40 @@ def test_real_client_marks_server_errors_retryable():
     with pytest.raises(PayPalError) as error:
         asyncio.run(make_client(handler).capture_authorization("A", Decimal("1"), "r"))
     assert error.value.retryable is True
+
+
+def test_real_client_keeps_and_logs_paypal_debug_id(caplog):
+    def handler(request: httpx.Request):
+        if request.url.path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3000})
+        return httpx.Response(
+            422,
+            json={
+                "name": "UNPROCESSABLE_ENTITY",
+                "debug_id": "f1a2b3c4d5e6",
+                "details": [{"issue": "INSTRUMENT_DECLINED"}],
+            },
+        )
+
+    with caplog.at_level("WARNING", logger="maxx.money.paypal"):
+        with pytest.raises(PayPalError) as error:
+            asyncio.run(make_client(handler).capture_order("ORDER1", "cap-1"))
+    assert error.value.name == "INSTRUMENT_DECLINED"
+    assert error.value.debug_id == "f1a2b3c4d5e6"
+    assert "f1a2b3c4d5e6" in caplog.text and "INSTRUMENT_DECLINED" in caplog.text
+
+
+def test_real_client_cancels_subscriptions_idempotently():
+    seen = []
+
+    def handler(request: httpx.Request):
+        if request.url.path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3000})
+        seen.append(request)
+        return httpx.Response(204)
+
+    asyncio.run(make_client(handler).cancel_subscription("I-SUB1", "bye"))
+    assert seen[0].headers["paypal-request-id"] == "cancel-I-SUB1"
 
 
 def test_real_client_verifies_webhooks_through_paypal(monkeypatch):

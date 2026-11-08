@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from decimal import Decimal
 from typing import Any
@@ -18,6 +19,7 @@ import httpx2 as httpx
 
 from maxx.config import settings
 
+log = logging.getLogger(__name__)
 CENTS = Decimal("0.01")
 # PayPal carrier codes used as-is; any other carrier is sent as OTHER with its name.
 PAYPAL_CARRIERS = {"UPS", "USPS", "FEDEX"}
@@ -46,9 +48,18 @@ def capture_fee(capture: dict) -> str | None:
 class PayPalError(Exception):
     """A PayPal call failed. `name` is PayPal's error name (for example INSTRUMENT_DECLINED)."""
 
-    def __init__(self, message: str, status: int = 0, name: str = "", retryable: bool = False):
+    def __init__(
+        self,
+        message: str,
+        status: int = 0,
+        name: str = "",
+        retryable: bool = False,
+        debug_id: str = "",
+    ):
         super().__init__(message)
         self.status, self.name, self.retryable = status, name, retryable
+        # PayPal's id for the failed call; PayPal support asks for it.
+        self.debug_id = debug_id
 
 
 class PayPalClient:
@@ -112,11 +123,21 @@ class PayPalClient:
             detail = {}
         name = str(detail.get("name") or "")
         issue = next(iter(detail.get("details") or []), {}).get("issue", "")
+        debug_id = str(detail.get("debug_id") or response.headers.get("paypal-debug-id") or "")
+        log.warning(
+            "PayPal %s %s failed: %s %s debug_id=%s",
+            method,
+            path,
+            response.status_code,
+            issue or name,
+            debug_id or "-",
+        )
         raise PayPalError(
             str(detail.get("message") or "PayPal refused the request."),
             response.status_code,
             issue or name,
             retryable=response.status_code in {429, 500, 502, 503, 504},
+            debug_id=debug_id,
         )
 
     async def create_order(
@@ -317,7 +338,10 @@ class PayPalClient:
 
     async def cancel_subscription(self, subscription_id: str, reason: str) -> None:
         await self._call(
-            "POST", f"/v1/billing/subscriptions/{subscription_id}/cancel", {"reason": reason[:128]}
+            "POST",
+            f"/v1/billing/subscriptions/{subscription_id}/cancel",
+            {"reason": reason[:128]},
+            f"cancel-{subscription_id}",
         )
 
     async def verify_webhook(self, headers: dict[str, str], body: bytes) -> bool:
