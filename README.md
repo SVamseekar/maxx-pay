@@ -5,30 +5,32 @@ move. When many people want the same product, they join a **Bloc**: each sets a 
 and AI agents bargain with sellers for all of them at once. Everyone pays the price they were
 allocated, never more than their maximum, and nothing if no deal closes.
 
-**Live demo:** https://maxx.souravamseekar.com · **Judges:** start at
-[`/judge`](https://maxx.souravamseekar.com/judge) · MIT licensed
+**Live demo:** https://pay.souravamseekar.com · **Judges:** start at
+[`/judge`](https://pay.souravamseekar.com/judge) · MIT licensed
 
 Built for the Nebius × NVIDIA Global AI Hackathon (Best Apps & Agents, Best Use of Tavily). Every
 model runs on **Nebius Token Factory**, and every reasoning step uses an **NVIDIA Nemotron** model.
 
 ## Try it (judges)
 
-1. Open [`/judge`](https://maxx.souravamseekar.com/judge) first. The free API sleeps when idle;
+1. Open [`/judge`](https://pay.souravamseekar.com/judge) first. The free API sleeps when idle;
    the first visit takes about a minute while a banner shows it waking.
 2. Enter the judge access code from the submission notes. You get your own guest account at once:
    no email, no password.
 3. **Try successful deal** opens your private copy of a Bloc with 600 simulated buyers and eight
-   seller agents. Set your maximum and **Join with a PayPal hold** (simulated).
+   seller agents. Set your maximum and **Join with a PayPal hold**: PayPal's real sandbox opens, and
+   you approve the hold with a PayPal sandbox test buyer account. No real money moves.
 4. **Close Bloc & negotiate** and watch the rounds stream in: Nemotron 3 Ultra negotiates for the
    group, Nemotron 3 Super runs each seller agent, and a deterministic engine sets every price.
-5. **Start the seller tour** for the seller side: your own seller agent, orders, shipping with a
-   test tracking number, payout on delivery.
+5. After the negotiation, add a delivery address under **Orders**. The simulated seller ships
+   with simulated tracking, and on delivery the seller is paid through a real PayPal sandbox
+   payout. **Group books** shows the capture, Maxx's fee, PayPal's own fees and the payout.
 6. **Scan**: the **Live example** runs the full live pipeline (vision, Tavily, verdict); you can
    also upload a screenshot of your own cart or product page.
 7. **Under the hood** lists every model call with its model id, latency and cost.
 
-Simulated buyers, sellers and PayPal are labelled everywhere. They place no real holds and nobody
-is charged for them.
+Your hold, capture and the payout are real PayPal sandbox transactions. The other 600 buyers and
+the eight sellers are simulated, labelled everywhere, and place no holds.
 
 ## How Maxx uses Nebius and Nemotron
 

@@ -1,6 +1,8 @@
 # Deployment
 
-The public demo at **https://maxx.souravamseekar.com** runs entirely on free plans:
+The public demo at **https://pay.souravamseekar.com** runs entirely on free plans, as its own
+stack (Vercel project `maxx-pay`, Render service `maxx-pay-api` in its own workspace, Neon project
+`maxx-pay`), separate from the Nebius × NVIDIA entry's demo:
 
 | Part | Where | Notes |
 |---|---|---|
@@ -48,6 +50,10 @@ Also set:
 - `PROXY_CLIENT_IP_SECRET` (32+ characters), the **same value on Vercel and Render**. The web app
   sends the visitor's address to the API signed with it; without it every visitor shares one
   allowance.
+- `PAYPAL_MODE=sandbox` with `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and
+  `PAYPAL_SELLER_RECEIVER` (a sandbox account other than the app's own, or payouts fail with
+  `SELF_PAY_NOT_ALLOWED`). Production refuses to start without `PAYPAL_WEBHOOK_ID`: register
+  `https://<api>/money/webhooks/paypal` on the sandbox app first, then set the id.
 - The AI spending caps (`AI_BUDGET_USD`, `AI_DAILY_BUDGET_USD` and the per-person, per-address and
   per-negotiation caps) and Tavily credit caps (`TAVILY_DAILY_CREDITS`, `TAVILY_MONTHLY_CREDITS`).
   See [AI guardrails](ai-guardrails.md) and `.env.example`.
@@ -60,11 +66,14 @@ On Vercel set `API_BASE_URL` (the Render URL), `PUBLIC_BASE_URL`, `PAYPAL_MODE` 
 1. Create a Neon project and copy its connection string as
    `postgresql+psycopg://…?sslmode=require`.
 2. Create the Render service from `render.yaml` (or with the same settings) and fill the
-   `sync: false` values. Automatic deploys are off: deploy a commit on purpose.
+   `sync: false` values. Automatic deploys are off: deploy a commit on purpose. Render's 750 free
+   hours a month are shared by every free service in a workspace, and running out suspends all of
+   them, so this service has its own workspace.
 3. Check `https://<api>/health/ready` returns `{"status":"ok","database":"ok"}`.
 4. Deploy `apps/web` to Vercel with the variables above and attach the domain.
-5. Open `/judge`, enter the code, run **Try successful deal**, and confirm the room streams rounds
-   and **Under the hood** lists Nemotron calls with their cost.
+5. Open `/judge`, enter the code, run **Try successful deal**, approve the hold with a sandbox
+   test buyer, and confirm the room streams rounds, the hold is captured, and after delivery the
+   payout reaches SUCCESS (see [verification](verification.md)).
 
 ## Docker
 

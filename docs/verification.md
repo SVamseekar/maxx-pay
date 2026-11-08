@@ -12,6 +12,23 @@ at the end. Fixture and replay results are kept apart from live results.
 - **Web:** ESLint, TypeScript and 55 unit tests pass.
 - Run them with `make check`.
 
+## Live on the hosted demo with real PayPal sandbox: 8 November 2026
+
+On https://pay.souravamseekar.com (Vercel web, Render API, Neon database, all free plans), a
+headless Chrome took the judge path: judge entry with the access code, **Try successful deal**,
+**Join with a PayPal hold** in PayPal's own sandbox popup with a US test buyer, **Close Bloc &
+negotiate** with live Nemotron agents, a delivery address, and the simulated seller shipping with
+simulated tracking.
+
+| Step | Result | PayPal ids |
+|---|---|---|
+| Hold | $170.00 authorized | order `66F12448KB923753S`, authorization `13A276960V113700A` |
+| Negotiation | Allocated at $138.00; 451 of 601 buyers served at $130.00 to $142.00; the run receipt listed each seller's final offer and units sold | |
+| Capture | $138.00, the rest of the hold released; PayPal fee $5.31 | capture `75823843P1282020X` |
+| Payout on delivery | $126.96 to the seller (92%), Maxx fee $11.04 (8%), status SENT; PayPal payout fee $0.25 | payout item `BXTHCSAPTZXSY` |
+| Books | Reconciled. Maxx keeps $11.04 − $5.31 − $0.25 = $5.48; no PayPal fee left unknown | |
+| Webhooks | PayPal sent `PAYMENT.CAPTURE.COMPLETED` and `PAYMENT.PAYOUTS-ITEM.SUCCEEDED` to the live API; each passed signature verification (HTTP 200) | webhook `4YW58479VN8475801` |
+
 ## Real PayPal sandbox, through the app: 8 November 2026
 
 Run locally with `PAYPAL_MODE=sandbox`, a US sandbox business account as the platform and a US
@@ -39,9 +56,9 @@ Two bugs found by the run and fixed, each with a test:
   one. When a hold is authorized, any other unapproved order for the same join is now retired, and
   orders that never held money are left out of the books and receipts.
 
-## Live on the hosted demo: 30 October 2026
+## Live on the Nebius entry's hosted demo: 30 October 2026
 
-On https://maxx.souravamseekar.com, through the same path a judge takes (judge entry, a private
+On https://maxx.souravamseekar.com (the Nebius × NVIDIA entry, PayPal simulator), through the same path a judge takes (judge entry, a private
 copy of the successful-deal scenario, a $170 simulated PayPal hold, **Close Bloc & negotiate**,
 rounds streamed through the web app):
 
@@ -105,7 +122,5 @@ These measure the app's own plumbing and rules, not model accuracy:
 - Screenshot-reading accuracy on a large, representative set of real carts (the plan was 40
   images), and product-match precision at scale.
 - Negotiation quality and savings over many live runs.
-- PayPal webhooks against the sandbox: they need a public API address, so the run above relied on
-  the app reading each status back from PayPal.
 - Real Stripe Identity and EasyPost calls: these run in labelled simulators.
 - Database backup and restore on the hosted database.
