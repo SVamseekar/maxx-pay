@@ -1,15 +1,18 @@
 # Maxx
 
-**Buy together. Pay less.** Screenshot what you're about to buy and Maxx tells you the smartest
-move. When many people want the same product, they join a **Bloc**: each sets a private maximum,
-and AI agents bargain with sellers for all of them at once. Everyone pays the price they were
-allocated, never more than their maximum, and nothing if no deal closes.
+**Buy together. Pay less.** When many people want the same product, they join a **Bloc**: each
+approves a **PayPal hold** for the most they would pay, and AI agents bargain with sellers for
+all of them at once. Each buyer is charged only the price they were allocated, never more than
+their hold, and the hold is released in full if no deal closes. Sellers are paid through PayPal
+when the parcel arrives.
 
 **Live demo:** https://pay.souravamseekar.com · **Judges:** start at
 [`/judge`](https://pay.souravamseekar.com/judge) · MIT licensed
 
-Built for the Nebius × NVIDIA Global AI Hackathon (Best Apps & Agents, Best Use of Tavily). Every
-model runs on **Nebius Token Factory**, and every reasoning step uses an **NVIDIA Nemotron** model.
+Built for the **PayPal AI Hackathon**. Money moves through the **PayPal sandbox** (Orders,
+Payments, Payouts, Webhooks, JavaScript SDK v6); the agents run on **NVIDIA Nemotron** models on
+**Nebius Token Factory**. The AI layer was also entered in another hackathon; see
+[Disclosure](#disclosure).
 
 ## Try it (judges)
 
@@ -22,17 +25,49 @@ model runs on **Nebius Token Factory**, and every reasoning step uses an **NVIDI
    you approve the hold with a PayPal sandbox test buyer account. No real money moves.
 4. **Close Bloc & negotiate** and watch the rounds stream in: Nemotron 3 Ultra negotiates for the
    group, Nemotron 3 Super runs each seller agent, and a deterministic engine sets every price.
-5. After the negotiation, add a delivery address under **Orders**. The simulated seller ships
-   with simulated tracking, and on delivery the seller is paid through a real PayPal sandbox
-   payout. **Group books** shows the capture, Maxx's fee, PayPal's own fees and the payout.
-6. **Scan**: the **Live example** runs the full live pipeline (vision, Tavily, verdict); you can
-   also upload a screenshot of your own cart or product page.
+   Your hold is captured at your allocated price and the rest released; **How this run was
+   decided** shows who was served and why the others were not.
+5. Add a delivery address under **Orders**. The simulated seller ships with simulated tracking,
+   and on delivery the seller is paid through a real PayPal sandbox payout. **Group books** shows
+   the capture, Maxx's fee, PayPal's own fees and the payout.
+6. **Scan**: the **Live example** runs the full pipeline (vision, web search, verdict), and
+   **Let the agent buy it** shows the guarded checkout.
 7. **Under the hood** lists every model call with its model id, latency and cost.
 
 Your hold, capture and the payout are real PayPal sandbox transactions. The other 600 buyers and
 the eight sellers are simulated, labelled everywhere, and place no holds.
 
-## How Maxx uses Nebius and Nemotron
+## How Maxx uses PayPal
+
+| PayPal API | What Maxx does with it | Code | Where you see it |
+|---|---|---|---|
+| JavaScript SDK v6 | The buyer approves the hold in PayPal's own popup | `apps/web/app/components/paypal-approval.tsx` | **Join with a PayPal hold** |
+| Orders v2, `intent: AUTHORIZE` | One order per join, for the buyer's maximum; then authorized | `services/api/maxx/money/service.py` | The hold dialog |
+| Payments v2: capture an authorization | Captures only the allocated price, `final_capture: true`, so the rest of the hold is released | `money/service.py` | The outcome card's PayPal ids |
+| Payments v2: void | Releases the whole hold for buyers who were not served, or when no deal closes | `money/service.py` | **Try no deal** |
+| Orders v2: track | Adds the seller's tracking number to the buyer's PayPal order | `services/api/maxx/fulfilment/service.py` | Orders |
+| Payouts v1 | Pays each seller per order on delivery (92%), and follows each item to `SUCCESS` | `fulfilment/service.py` | **Group books** |
+| Payments v2: refund | Refunds orders cancelled before shipping, orders not shipped in time, and resolved problem reports | `fulfilment/service.py` | Orders |
+| Orders v2, `intent: CAPTURE` | Agentic checkout of a single verified offer, after a server-side guard re-checks it | `money/checkout.py` | **Let the agent buy it** |
+| Webhooks | Signature checked with PayPal, each event applied once; captures, voids, payouts, subscriptions | `money/webhooks.py` | **Group books** updates |
+| Subscriptions v1 | Maxx Plus (higher agent-checkout limit), switched on only by the `ACTIVATED` webhook | `money/subscriptions.py` | Account |
+
+How the money stays safe:
+
+- **The AI never touches money.** Agents only bargain. A fixed rule in code decides who is served
+  and at which offer, and every amount is re-checked against the buyer's hold right before PayPal
+  is called.
+- **No double charges.** Every PayPal write carries a `PayPal-Request-Id`, so a retry returns the
+  first result. A capture above the hold is refused, even when it arrives by webhook.
+- **Books that reconcile to the cent.** A hash-chained ledger records every hold, capture, void,
+  refund and payout, and PayPal's own fees as PayPal reports them. Maxx's 8% fee comes from the
+  seller side and pays PayPal's capture and payout fees; buyers never pay more than their price.
+- **Sandbox only.** The API refuses to start against PayPal's live servers.
+
+Measured on the live demo, with PayPal ids: [verification](docs/verification.md). Details:
+[payments](docs/payments.md).
+
+## How Maxx uses AI
 
 | Job | Model (Nebius Token Factory) |
 |---|---|
@@ -44,7 +79,8 @@ the eight sellers are simulated, labelled everywhere, and place no holds.
 
 - **Models never set money.** The negotiator chooses a reserve price and which seller to press;
   seller agents bid within floors and stock enforced in code; a deterministic clearing engine
-  allocates units and sets every price.
+  allocates units and sets every price. A seller agent that gives no valid answer misses that
+  round only, and its last valid offer stands.
 - **Strict contracts.** Each role has a JSON schema sent with every call (in the prompt and as
   `response_format`), post-checks in code, and a bounded set of tools.
 - **Spending caps.** A Postgres ledger caps AI spend in total, per day, per person, per address and
@@ -53,33 +89,31 @@ the eight sellers are simulated, labelled everywhere, and place no holds.
 - **Transparency.** Every call is logged with model id, tokens, latency and cost (no prompts,
   images or keys) and shown on Under the hood.
 
-Details: [AI guardrails](docs/ai-guardrails.md).
+A live scan also searches the web with Tavily; code, not the model, decides which offers count
+(same product, a price quoted from the page, in stock). Details: [AI guardrails](docs/ai-guardrails.md).
 
-## How Maxx uses Tavily
+## Built with
 
-A live scan searches Tavily once with full page text (1 credit), preferring US retailers and
-makers' own stores and excluding news, review, video and deal sites. Only stores whose pages can be
-read can confirm stock and shipping, so when fewer than two stores confirm an offer, a second search
-asks only those stores. At most two pages are read in full with Extract.
-
-Code, not the model, decides which offers count: product pages only, a price quoted from the page,
-the same brand, model, colour and pack size, new rather than refurbished or open box, no
-card-signup or coupon prices, not on backorder. A Money Score needs two such stores, or the maker's
-own store with a warning; otherwise the verdict names the lowest price it saw and says the evidence
-is thin. A scan costs 1–4 credits, results are cached for six hours, and daily and monthly credit
-caps stop runaway spend.
+- **PayPal:** the sandbox REST APIs and JavaScript SDK v6 above. The **PayPal AI Toolkit** for
+  Claude Code was used while building: its `/paypal:doctor` checks found three issues in the
+  money code, fixed in [`21545d6`](https://github.com/SVamseekar/maxx-pay/commit/21545d6). Maxx
+  calls the REST APIs directly; it does not use PayPal's MCP server or the Agent Toolkit package.
+- **AI:** NVIDIA Nemotron and Qwen models on Nebius Token Factory; Tavily for web search.
+- **App:** Next.js 16.3, React 19.3, TypeScript 5.9, Tailwind 4.3; Python 3.12, FastAPI 0.142,
+  Pydantic 2.13, SQLAlchemy 2.0, Alembic; Postgres 17.
+- **Hosting:** Vercel, Render and Neon free plans; email through Brevo.
 
 ## What's in it
 
-- **Scan → verdict:** screenshot upload, editable fields, Money Score (0–100), one recommended move,
-  and links to the offers found.
 - **Blocs and negotiation:** commitments with a maximum price, a countdown, live streamed rounds,
   partial fills, and a clear outcome for every member: a receipt of who was served and why the
   others were not, and for an unserved buyer the prices that cleared and an optional new Bloc at a
   limit they choose.
-- **Payments** (`PAYPAL_MODE=simulator` or `sandbox`): a PayPal hold on joining, capture of only
-  the allocated price, release for everyone else, seller payouts, agentic checkout and PYUSD.
-  See [payments](docs/payments.md).
+- **Payments:** PayPal holds, partial capture, release, per-order seller payouts, refunds, agentic
+  checkout, Maxx Plus, and PYUSD. `PAYPAL_MODE` is `sandbox`, or `simulator` for running without
+  PayPal credentials (labelled everywhere). See [payments](docs/payments.md).
+- **Scan → verdict:** screenshot upload, editable fields, Money Score (0–100), one recommended move,
+  and links to the offers found.
 - **Marketplace:** seller onboarding with identity and sanctions checks, standing offers and
   listings, a bounded seller AI agent, orders, carrier tracking, payout on delivery, refunds and
   cases. Maxx is the platform, not the seller. See [marketplace](docs/marketplace.md).
@@ -98,10 +132,8 @@ render.yaml      the hosted API's settings
 
 Postgres holds everything durable through one `DATABASE_URL`: Blocs, jobs, an append-only event
 journal, a hash-chained money ledger, the price cache and model-call metadata. Screenshots are
-processed in memory and never stored.
-
-Stack: Next.js 16.3, React 19.3, TypeScript 5.9, Tailwind 4.3; Python 3.12, FastAPI 0.142,
-Pydantic 2.13, SQLAlchemy 2.0, Alembic; Postgres 17.
+processed in memory and never stored. The browser never talks to the API or PayPal's servers
+directly except for PayPal's own approval popup.
 
 ## Run it locally
 
@@ -117,7 +149,10 @@ make api                 # terminal 1: http://localhost:8000
 make web                 # terminal 2: http://localhost:3001
 ```
 
-Live mode is the default. With no keys, run fully offline on the five synthetic samples:
+For real PayPal sandbox money, set `PAYPAL_MODE=sandbox`, `PAYPAL_CLIENT_ID`,
+`PAYPAL_CLIENT_SECRET` and `PAYPAL_SELLER_RECEIVER` (a sandbox account other than the app's own).
+Without them, `PAYPAL_MODE=simulator` runs the same flow on a labelled simulator. With no AI keys,
+run fully offline on the five synthetic samples:
 
 ```bash
 SCAN_MODE=fixture MATCH_MODE=fixture NEGOTIATION_MODE=fixture make api
@@ -135,25 +170,42 @@ make verify-guardrails   # live: each model's contract against Token Factory (sp
 make evaluate            # fixture evaluation, writes evals/core-fixture.json
 ```
 
-## Hosting
-
-The demo runs on free plans: the web app on Vercel, the API on Render, Postgres on Neon, email
-through Brevo. See [deployment](docs/deployment.md).
-
 ## Docs
 
 - [Verification](docs/verification.md): what was measured, live and offline, and what was not
-- [AI guardrails](docs/ai-guardrails.md) · [Payments](docs/payments.md) ·
+- [Payments](docs/payments.md) · [AI guardrails](docs/ai-guardrails.md) ·
   [Marketplace](docs/marketplace.md) · [Accounts](docs/accounts.md) ·
   [Security](docs/security.md) · [Performance](docs/performance.md) ·
-  [Market and compliance research](docs/market-research.md) · [Deployment](docs/deployment.md)
+  [Market and compliance research](docs/market-research.md) · [Deployment](docs/deployment.md) ·
+  [Changelog](CHANGELOG.md)
+
+## What changed since 1 October
+
+The repository starts on 5 October 2026, inside the PayPal AI Hackathon's window, and every commit
+keeps its original date. The full story is in the [changelog](CHANGELOG.md):
+
+- **5 to 30 October:** the app, the AI agents and guardrails, accounts, the marketplace and a
+  PayPal money layer on a simulator
+  ([commits](https://github.com/SVamseekar/maxx-pay/commits/89495fe)). This version was submitted
+  to the Nebius × NVIDIA Global AI Hackathon on 30 October.
+- **From 8 November, for this entry:** the money layer running on the real PayPal sandbox, PayPal's
+  own fees in the books, the 8% fee model, webhook and payout fixes found with the PayPal AI
+  Toolkit and the sandbox, the run receipt and rejoin option, a separate hosted demo, and a live
+  end-to-end run with PayPal ids
+  ([all changes](https://github.com/SVamseekar/maxx-pay/compare/89495fe...main)).
 
 ## Disclosure
 
-New project, started 5 October 2026. In the demo scenarios the eight seller agents and the crowds
-of buyers (600 in the successful deal, 100 in each of the others) are simulated and labelled; they
-place no holds and nobody is charged for them. PayPal, carrier tracking and identity checks run in
-labelled simulators unless real keys are set. The 15 policy pages under `/legal` are drafts.
+- **Other entry.** The negotiation and AI layer, and the app around it, were also entered in the
+  Nebius × NVIDIA Global AI Hackathon (submitted 30 October 2026, demo at a separate address).
+  This entry is the same product, significantly updated after that for PayPal, as listed above.
+  The two demos run on separate servers and databases.
+- **Simulated parts.** In the demo scenarios the eight seller agents and the crowds of buyers (600
+  in the successful deal, 100 in each of the others) are simulated and labelled; they place no
+  holds. Carrier tracking and identity checks run in labelled simulators.
+- **Not set up in the sandbox yet.** Maxx Plus needs two billing plans created in the PayPal
+  sandbox; until then the account page says the plan is not set up.
+- The 15 policy pages under `/legal` are drafts.
 
 ## License
 
