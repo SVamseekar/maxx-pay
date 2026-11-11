@@ -582,12 +582,25 @@ async def release_payout(order_id: str) -> str:
             "sender_batch_id": f"maxx-order-{order_id}-r{attempt}",
             "receiver": receiver,
             "status": "PENDING",
+            # Cleared: if this attempt times out, the next pass resends the same batch id
+            # (idempotent at PayPal). Only a new INSUFFICIENT_FUNDS refusal allows a new id.
+            "failure_reason": "",
             "updated_at": stamp,
         }
+        t = schema.payouts.c
         with storage.get_store().engine.begin() as db:
-            db.execute(
-                update(schema.payouts).where(schema.payouts.c.id == existing["id"]).values(**fields)
-            )
+            taken = db.execute(
+                update(schema.payouts)
+                .where(
+                    t.id == existing["id"],
+                    t.attempt == existing["attempt"],
+                    t.failure_reason == existing["failure_reason"],
+                    t.paypal_batch_id.is_(None),
+                )
+                .values(**fields)
+            ).rowcount
+        if taken != 1:
+            return "WAITING"  # another pass took this retry
         row = {**existing, **fields}
     else:
         row = existing
