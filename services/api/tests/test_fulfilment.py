@@ -596,10 +596,10 @@ def test_a_payout_refused_for_maxx_funds_is_retried_later():
         "updated_at": now,
         "paypal_batch_id": None,
     }
-    assert not fulfilment._retry_due(base)  # waits ten minutes first
-    assert fulfilment._retry_due({**base, "updated_at": now - 601})
-    assert fulfilment._retry_due({**base, "status": "PENDING", "updated_at": now - 601})
+    assert not fulfilment._retry_due(base)  # waits an hour first
+    assert fulfilment._retry_due({**base, "updated_at": now - 3601})
+    assert fulfilment._retry_due({**base, "status": "PENDING", "updated_at": now - 3601})
     assert not fulfilment._retry_due({**base, "failure_reason": "RECEIVER_UNREGISTERED"})
-    assert not fulfilment._retry_due({**base, "status": "SENT", "updated_at": now - 601})
+    assert not fulfilment._retry_due({**base, "status": "SENT", "updated_at": now - 3601})
     # A failure PayPal reported on a real batch stays terminal.
-    assert not fulfilment._retry_due({**base, "updated_at": now - 601, "paypal_batch_id": "B1"})
+    assert not fulfilment._retry_due({**base, "updated_at": now - 3601, "paypal_batch_id": "B1"})

@@ -495,7 +495,7 @@ def _receiver(order: dict, seller: dict | None) -> str | None:
 
 # PayPal refusals that are about Maxx's own balance, not the seller: try again later.
 RETRY_LATER = {"INSUFFICIENT_FUNDS"}
-RETRY_AFTER_SECONDS = 600
+RETRY_AFTER_SECONDS = 3600
 
 
 def _retry_due(payout: dict) -> bool:

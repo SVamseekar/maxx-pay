@@ -40,6 +40,11 @@ numbered releases yet; chapters are named by date and purpose.
   guest test buyer's hold is one Orders call paid with PayPal's sandbox test card, then
   settles, ships and pays out like any other order. PayPal calls are paced
   (`PAYPAL_CALLS_PER_MINUTE`) to stay under the sandbox's per-minute limit.
+- A real group run on the live site: 1,003 PayPal sandbox holds in one Bloc, 225 partial captures
+  ($29,700.00), 778 voids, 0 failed; results in the README.
+- Settlement survives restarts (claim heartbeat, stale-claim resume); webhook checks are capped
+  and deferred while money calls are queued; payouts refused for `INSUFFICIENT_FUNDS` are retried
+  hourly as a fresh, claimed attempt.
 
 ### Changed
 

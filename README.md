@@ -37,6 +37,39 @@ Payments, Payouts, Webhooks, JavaScript SDK v6); the agents run on **NVIDIA Nemo
 Your hold, capture and the payout are real PayPal sandbox transactions. The other 600 buyers and
 the eight sellers are simulated, labelled everywhere, and place no holds.
 
+## A real group in the PayPal sandbox (11–12 November 2026)
+
+To show the group mechanism working in PayPal itself, not only for one buyer, we filled the
+shared "successful deal" Bloc on the live site with real PayPal sandbox holds and ran it once:
+
+| | |
+|---|---|
+| Buyers in the group | 1,603: **1,003 with real PayPal sandbox holds** and 600 simulated |
+| How the real holds were placed | 1,000 by scripted test buyers, each a real Orders v2 `AUTHORIZE` paid with PayPal's sandbox test card (`/demo/bulk/buyer`, off unless a secret token is set); 3 by sandbox buyer accounts approving in PayPal's popup |
+| Held in total | $151,973.00 |
+| Negotiation | 5 live rounds, Nemotron 3 Ultra negotiator and eight Nemotron 3 Super seller agents, 50 model calls, about $0.05 |
+| Outcome | 450 buyers served at $130 to $134 by three sellers, 1,153 not served |
+| Settlement in PayPal | **225 partial captures, $29,700.00; 778 holds voided, $109,929.00; 0 failed** |
+| Seller payouts | 92% per order through PayPal Payouts, each seller agent paid into its own sandbox Business account (`PAYPAL_SELLER_RECEIVERS`). 43 payouts ($5,216.40) went through; the sandbox then refused the rest with `INSUFFICIENT_FUNDS`, so they wait and are retried hourly |
+
+The 1,000 card buyers and the sandbox accounts are test accounts we created and drove by script,
+not people. PayPal calls are paced at 40 a minute (`PAYPAL_CALLS_PER_MINUTE`), because the sandbox
+blocks an address for five minutes after 50 calls in a minute; at that pace the run took about an
+hour to join and about an hour to settle.
+
+What the run taught us, and what production would need:
+
+- **Payouts need cleared funds.** In the sandbox, captured card money was not available to
+  Payouts. A live marketplace would pay sellers through PayPal's marketplace product
+  (Multiparty / Complete Payments Platform), where each capture goes to the seller with Maxx's
+  fee as a platform fee, rather than holding money and paying out later.
+- **The payee is unknown when the hold is placed.** A PayPal order names its payee at creation,
+  but the seller that wins is only known after the negotiation. Production needs either PayPal's
+  approval for a platform that holds and disburses, or a second, smaller approval to the winning
+  seller.
+- **Rate limits shape the design.** Settlement, payouts and webhook checks share one paced budget;
+  money calls go first and webhooks are deferred (PayPal retries them for three days).
+
 ## How Maxx uses PayPal
 
 | PayPal API | What Maxx does with it | Code | Where you see it |
@@ -191,7 +224,8 @@ keeps its original date. The full story is in the [changelog](CHANGELOG.md):
 - **From 8 November, for this entry:** the money layer running on the real PayPal sandbox, PayPal's
   own fees in the books, the 8% fee model, webhook and payout fixes found with the PayPal AI
   Toolkit and the sandbox, the run receipt and rejoin option, a separate hosted demo, and a live
-  end-to-end run with PayPal ids
+  end-to-end run with PayPal ids, and a real group run with 1,003 sandbox holds and paced PayPal
+  calls
   ([all changes](https://github.com/SVamseekar/maxx-pay/compare/89495fe...main)).
 
 ## Disclosure
@@ -203,6 +237,8 @@ keeps its original date. The full story is in the [changelog](CHANGELOG.md):
 - **Simulated parts.** In the demo scenarios the eight seller agents and the crowds of buyers (600
   in the successful deal, 100 in each of the others) are simulated and labelled; they place no
   holds. Carrier tracking and identity checks run in labelled simulators.
+- **Scripted test buyers.** The 1,003 real holds in the group run were placed by test accounts
+  we created and drove by script (1,000 by sandbox test card, 3 through PayPal's popup).
 - **Not set up in the sandbox yet.** Maxx Plus needs two billing plans created in the PayPal
   sandbox; until then the account page says the plan is not set up.
 - The 15 policy pages under `/legal` are drafts.
