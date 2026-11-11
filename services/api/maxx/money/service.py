@@ -278,6 +278,20 @@ def _claim(bloc_id: str, generation: int) -> bool:
         return taken.rowcount == 1
 
 
+def _heartbeat(bloc_id: str, generation: int) -> None:
+    """Keep a long settlement's claim fresh, so no other worker takes it over mid-way."""
+    with storage.get_store().engine.begin() as db:
+        db.execute(
+            update(schema.settlements)
+            .where(
+                schema.settlements.c.bloc_id == bloc_id,
+                schema.settlements.c.generation == generation,
+                schema.settlements.c.status == "RUNNING",
+            )
+            .values(started_at=int(time.time()))
+        )
+
+
 def _finish(bloc_id: str, generation: int, status: str, summary: dict) -> None:
     with storage.get_store().engine.begin() as db:
         db.execute(
@@ -351,8 +365,13 @@ async def settle_bloc(store, bloc_id: str) -> dict:
     members = {m.id: m for m in bloc.members}
     gate = asyncio.Semaphore(settings.settlement_concurrency)
 
+    beat = [time.monotonic()]
+
     async def one(payment: dict):
         async with gate:
+            if time.monotonic() - beat[0] > 60:
+                beat[0] = time.monotonic()
+                _heartbeat(bloc.id, bloc.generation)
             member = members.get(payment["member_id"] or "")
             winner = (
                 bloc.status == "SETTLED"

@@ -524,3 +524,13 @@ def test_paypal_calls_are_paced_per_minute(monkeypatch):
 
     asyncio.run(run())
     assert len(slept) == 2 and all(s > 0 for s in slept)
+
+
+def test_a_long_settlement_keeps_its_claim(runtime):
+    from maxx.money import service as money_service
+
+    assert money_service._claim("demo-x", 1)
+    with storage.get_store().engine.begin() as db:
+        db.execute(update(schema.settlements).values(started_at=int(time.time()) - 400))
+    money_service._heartbeat("demo-x", 1)
+    assert not money_service._claim("demo-x", 1)
