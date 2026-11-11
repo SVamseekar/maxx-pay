@@ -503,6 +503,8 @@ def _retry_due(payout: dict) -> bool:
     return (
         payout["status"] in {"PENDING", "FAILED"}
         and payout["failure_reason"] in RETRY_LATER
+        # Refused when the payout was created: no PayPal batch exists, nothing can be replayed.
+        and not payout["paypal_batch_id"]
         and time.time() >= payout["updated_at"] + RETRY_AFTER_SECONDS
     )
 
@@ -514,11 +516,12 @@ async def release_payout(order_id: str) -> str:
     if pp is None or not order or order["status"] not in {"SHIPPED", "DELIVERED"}:
         return "NONE"
     existing = _payout_for_order(order_id)
-    if existing and existing["failure_reason"] in RETRY_LATER and existing["status"] != "SENT":
-        if not _retry_due(existing):
+    retrying = bool(existing and _retry_due(existing))
+    if existing and not retrying:
+        if existing["failure_reason"] in RETRY_LATER and not existing["paypal_batch_id"]:
             return "WAITING"
-    elif existing and existing["status"] in {"SENT", "OFFSET", "FAILED"}:
-        return existing["status"]
+        if existing["status"] in {"SENT", "OFFSET", "FAILED"}:
+            return existing["status"]
     if store.open_case_for(order_id) or audit.payments_frozen():
         return "WAITING"  # a dispute or the emergency brake pauses the money
     seller = None if order["simulated"] else sellers.by_code(order["seller_code"])
@@ -571,6 +574,21 @@ async def release_payout(order_id: str) -> str:
         if row["status"] == "OFFSET":
             audit.record("system", "payout.offset", order_id, f"owed {taken}")
             return "OFFSET"
+    elif retrying:
+        # A fresh attempt: a new batch id, and the receiver as it is now (verified above).
+        attempt = int(existing["attempt"]) + 1
+        fields = {
+            "attempt": attempt,
+            "sender_batch_id": f"maxx-order-{order_id}-r{attempt}",
+            "receiver": receiver,
+            "status": "PENDING",
+            "updated_at": stamp,
+        }
+        with storage.get_store().engine.begin() as db:
+            db.execute(
+                update(schema.payouts).where(schema.payouts.c.id == existing["id"]).values(**fields)
+            )
+        row = {**existing, **fields}
     else:
         row = existing
     return await _send(pp, order, row)
