@@ -69,18 +69,21 @@ class Pace:
     def __init__(self) -> None:
         self.stamps: deque[float] = deque()
         self.lock: asyncio.Lock | None = None
-        self.waiting = 0  # callers queued for a turn right now
+        self.waiting = 0  # money calls queued for a turn right now
+        self.others = 0  # webhook signature checks queued or running
 
     async def wait(self, per_minute: int, counted: bool = True) -> None:
         """`counted` callers are money calls; only they make the client report itself busy."""
         if per_minute <= 0:
             return
         self.lock = self.lock or asyncio.Lock()
-        self.waiting += counted
+        if counted:
+            self.waiting += 1
         try:
             await self._turn(per_minute)
         finally:
-            self.waiting -= counted
+            if counted:
+                self.waiting -= 1
 
     async def _turn(self, per_minute: int) -> None:
         assert self.lock is not None
@@ -419,7 +422,8 @@ class PayPalClient:
 
     def busy(self) -> bool:
         """PayPal calls are already queued behind the per-minute cap."""
-        return settings.paypal_calls_per_minute > 0 and self._pace.waiting >= 2
+        pace = self._pace
+        return settings.paypal_calls_per_minute > 0 and (pace.waiting >= 2 or pace.others >= 2)
 
     async def verify_webhook(self, headers: dict[str, str], body: bytes) -> bool:
         lowered = {k.lower(): v for k, v in headers.items()}
@@ -436,7 +440,16 @@ class PayPalClient:
             event = json.loads(body)
         except ValueError:
             return False
-        check = await self._call(
+        # Counted from before the wait, so a burst cannot slip past `busy()` all at once.
+        self._pace.others += 1
+        try:
+            check = await self._verify(lowered, event)
+        finally:
+            self._pace.others -= 1
+        return check.get("verification_status") == "SUCCESS"
+
+    async def _verify(self, lowered: dict[str, str], event: dict) -> dict:
+        return await self._call(
             "POST",
             "/v1/notifications/verify-webhook-signature",
             {
@@ -450,7 +463,6 @@ class PayPalClient:
             },
             money=False,
         )
-        return check.get("verification_status") == "SUCCESS"
 
 
 def get_paypal():

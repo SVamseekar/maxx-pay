@@ -567,3 +567,12 @@ def test_webhook_checks_never_count_as_busy(monkeypatch):
         return pace.waiting
 
     assert asyncio.run(run()) == 0
+
+
+def test_queued_webhook_checks_are_capped(monkeypatch):
+    from maxx.money.paypal import PayPalClient
+
+    monkeypatch.setattr(settings, "paypal_calls_per_minute", 40)
+    client = PayPalClient("https://example.invalid", "id", "secret")
+    client._pace.others = 2
+    assert client.busy()
