@@ -20,5 +20,6 @@ export function deadlineText(seconds: number, now = Date.now() / 1000): string {
   if (delta <= 0) return "now overdue";
   if (delta < 3600) return `in ${Math.max(1, Math.round(delta / 60))} min`;
   if (delta < 86400) return `in ${Math.round(delta / 3600)} h`;
-  return `in ${Math.round(delta / 86400)} days`;
+  const days = Math.round(delta / 86400);
+  return `in ${days} ${days === 1 ? "day" : "days"}`;
 }

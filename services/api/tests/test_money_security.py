@@ -42,13 +42,14 @@ def test_a_single_hold_has_a_ceiling(runtime, monkeypatch):
 
 
 def test_total_open_holds_per_account_are_capped(runtime, monkeypatch):
-    monkeypatch.setattr(settings, "hold_outstanding_max_per_user", "250")
+    monkeypatch.setattr(settings, "hold_outstanding_max_per_user", "270")
     with TestClient(app) as client:
         sign_up(client)
         buy(client, "demo-success", "150")
+        # demo-failure is the $230 stand mixer: a maximum must be $115 to $230.
         over = hold(client, "150", "demo-failure")
         assert over.status_code == 409 and "total" in over.json()["detail"]
-        assert hold(client, "100", "demo-failure").status_code == 200
+        assert hold(client, "120", "demo-failure").status_code == 200
 
 
 def test_number_of_open_holds_is_capped(runtime, monkeypatch):
@@ -80,14 +81,14 @@ def test_the_emergency_brake_stops_new_holds_and_captures_but_keeps_holds_safe(
 
 
 def test_large_holds_need_a_recent_identity_check(runtime, monkeypatch):
-    monkeypatch.setattr(settings, "hold_reauth_over", "100")
+    monkeypatch.setattr(settings, "hold_reauth_over", "120")
     with TestClient(app) as client:
         user = sign_up(client)
         assert hold(client, "150").status_code == 200  # just signed in
         monkeypatch.setattr(settings, "reauth_minutes", -1)
         stale = hold(client, "150", "demo-failure")
         assert stale.status_code == 403 and stale.json()["code"] == "reauth_required"
-        assert hold(client, "100", "demo-failure").status_code == 200  # at the threshold is fine
+        assert hold(client, "120", "demo-failure").status_code == 200  # at the threshold is fine
         assert user["email"]
 
 

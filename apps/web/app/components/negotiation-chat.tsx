@@ -10,6 +10,7 @@ import { latestOffers } from "../presentation";
 import { AnimatedNumber, useMotionPreferences } from "./motion-system";
 import { ShimmerText, StreamText } from "./ambient";
 import NegotiationMap from "./negotiation-map";
+import { counted } from "../presentation";
 
 type EntryProps = { group: ConversationGroup; events: BlocEvent[]; stream: boolean; onStream: () => void };
 
@@ -68,7 +69,7 @@ function ConversationEntry({ group, events, stream, onStream }: EntryProps) {
     </div>;
   }
   if (group.kind === "tentative_allocation") {
-    const text = `${event.data.served ?? 0} buyers can be served${event.data.avg_price ? ` at an average of ${usd(event.data.avg_price)}` : " at this point"}.${event.data.unserved !== undefined ? ` ${event.data.unserved} remain unserved.` : ""}`;
+    const text = `${counted(event.data.served ?? 0, "buyer")} can be served${event.data.avg_price ? ` at an average of ${usd(event.data.avg_price)}` : " at this point"}.${event.data.unserved !== undefined ? ` ${event.data.unserved} ${event.data.unserved === 1 ? "remains" : "remain"} unserved.` : ""}`;
     return <div className="chat-reply"><Sender name="Allocation check" role="Deterministic" detail={`Round ${group.round}`} /><Body text={text} stream={stream} onStream={onStream} /></div>;
   }
   if (group.kind === "negotiator_fallback") return <div className="chat-reply chat-exception"><Sender name="Negotiator update" detail={`Round ${group.round}`} /><Body text={event.data.message ?? "Negotiator unavailable; using the fixed rule for this round."} stream={stream} onStream={onStream} /></div>;

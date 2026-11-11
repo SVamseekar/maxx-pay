@@ -63,7 +63,12 @@ async def scan(
         payer = budget.payer_for(user, client_ip(request))
         async with asyncio.timeout(100):
             with budget.payer_scope(payer, settings.ai_max_calls_per_scan):
-                return await run_scan(bytes(data), mime, owns_similar, request_id, corrections)
+                result = await run_scan(bytes(data), mime, owns_similar, request_id, corrections)
+        from maxx.money import checkout
+
+        current = result.item.price if result.item.currency == "USD" else None
+        result.offers_seal = checkout.seal_offers(result.rows, current)
+        return result
     except ValueError:
         return JSONResponse(
             {

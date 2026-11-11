@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from maxx.auth import ratelimit
 from maxx.auth.deps import CurrentUser, same_origin
-from maxx.demo import tour
+from maxx.demo import catalogue, tour
 from maxx.negotiate.routes import DEMO_CROWD, RuntimeDep
 from maxx.providers import ProviderError
 
@@ -39,22 +39,42 @@ async def start_tour(runtime: RuntimeDep, user: CurrentUser):
         raise HTTPException(409, str(exc)) from None
 
 
+@router.get("/products")
+def products():
+    """The everyday demo products anyone can try in a private Bloc. All made up, prices
+    illustrative."""
+    return [
+        {
+            "id": p.id,
+            "title": p.title,
+            "typical_price": str(p.typical),
+            "moment": p.moment,
+            "unit_count": p.unit_count,
+            "unit_noun": p.unit_noun,
+        }
+        for p in catalogue.PRODUCTS
+    ]
+
+
 @router.post("/lab/{scenario}", status_code=201)
-def open_lab(scenario: str, runtime: RuntimeDep, user: CurrentUser):
+def open_lab(scenario: str, runtime: RuntimeDep, user: CurrentUser, product: str | None = None):
     """The judge's own copy of a demo scenario: same simulated crowd and sellers, but nobody
     else's seat, hold or finished outcome is in it, so it never needs a reset. Unlisted, like
-    the seller tour; an unfinished copy is reused rather than duplicated."""
-    if scenario not in DEMO_CROWD:
+    the seller tour; an unfinished copy is reused rather than duplicated. `product` picks one of
+    the everyday demo products; without it each scenario uses its own product."""
+    if scenario not in DEMO_CROWD or (product is not None and product not in catalogue.BY_ID):
         raise HTTPException(404, "Not found.")
-    return {"bloc_id": lab_copy(runtime, user.id, scenario)}
+    return {"bloc_id": lab_copy(runtime, user.id, scenario, product)}
 
 
-def lab_copy(runtime, user_id: str, scenario: str) -> str:
-    """The person's open private copy of a demo scenario, made if they have none."""
+def lab_copy(runtime, user_id: str, scenario: str, product: str | None = None) -> str:
+    """The person's open private copy of a demo scenario and product, made if they have none."""
+    title = catalogue.for_scenario(scenario, product).title
     for bloc in runtime.store.list_for_user(user_id):
         if (
             bloc.id.startswith(f"lab-{scenario}-")
             and bloc.owner_id == user_id
+            and bloc.title == title
             and bloc.status == "OPEN"
             and bloc.closes_at > time.time()
         ):
@@ -62,7 +82,7 @@ def lab_copy(runtime, user_id: str, scenario: str) -> str:
     ratelimit.hit(f"demo-lab:{user_id}", 12, 3600)
     ratelimit.hit("demo-lab:all", 600, 3600)
     tag = uuid.uuid4().hex[:12]
-    bloc = runtime.scenario_bloc(f"lab-{scenario}-{tag}", scenario, runtime.mode)
+    bloc = runtime.scenario_bloc(f"lab-{scenario}-{tag}", scenario, runtime.mode, product)
     bloc.product_key = f"demo-lab:{user_id[:8]}:{scenario}:{tag}"
     bloc.owner_id = user_id
     runtime.store.create(bloc)

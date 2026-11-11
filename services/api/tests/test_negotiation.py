@@ -65,6 +65,36 @@ def test_withdrawal_reclears_without_withdrawn_seller(tmp_path):
     assert all(a.seller_id != "A" for a in b.outcome.allocations)
 
 
+def test_scripted_withdrawal_happens_even_when_a_live_model_would_keep_bidding(tmp_path):
+    class LiveIgnoresScript(FixtureAdapter):
+        mode = "live"
+
+        async def seller(self, context):
+            bid = await super().seller(context)
+            return bid.model_copy(update={"withdraw": False})
+
+    store = setup_bloc(tmp_path, "flaky")
+    asyncio.run(run_negotiation(store, "test", LiveIgnoresScript(), round_delay=0))
+    b = store.get("test")
+    left = [e for e in b.events if e.type == "seller_withdrew"]
+    assert [(e.data["seller"], e.data["round"]) for e in left] == [("A", 2)]
+    assert not any(
+        e.type == "seller_offer" and e.data["seller"] == "A" and e.data["round"] >= 2
+        for e in b.events
+    )
+    assert all(a.seller_id != "A" for a in b.outcome.allocations)
+
+
+def test_a_closing_round_sends_no_seller_a_message(tmp_path):
+    store = setup_bloc(tmp_path)
+    asyncio.run(run_negotiation(store, "test", FixtureAdapter(), round_delay=0))
+    b = store.get("test")
+    closing = max(e.data["round"] for e in b.events if e.type == "round_start")
+    asked = [e for e in b.events if e.type == "negotiator_message" and e.data["round"] == closing]
+    offered = [e for e in b.events if e.type == "seller_offer" and e.data["round"] == closing]
+    assert not offered and not asked
+
+
 def test_clearing_explains_why_each_unserved_buyer_missed_out():
     from maxx.negotiate.contracts import Member, Offer
     from maxx.negotiate.engine import clear
@@ -135,7 +165,7 @@ def test_reserve_cannot_exceed_sixtieth_percentile_and_runner_deadline(tmp_path)
     b = store.get("test")
     assert b.status == "FAILED"
     assert all(m.status != "HELD" for m in b.members)
-    assert b.failure_reason == "Negotiation timed out. All simulated commitments released."
+    assert b.failure_reason == "Negotiation timed out. Every hold and commitment was released."
 
 
 def test_close_uses_current_offers_without_requesting_another_bid(tmp_path):

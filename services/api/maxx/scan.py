@@ -112,6 +112,7 @@ class ScanResult(Contract):
     latency_ms: int
     calls: list[CallRecord]
     open_bloc_id: str | None = None
+    offers_seal: str | None = None
 
 
 def validate_image(data: bytes, mime: str) -> str:

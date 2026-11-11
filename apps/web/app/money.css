@@ -34,6 +34,16 @@
 .books dt { color: var(--muted); }
 .books dd { margin: 0; font-weight: 650; font-variant-numeric: tabular-nums; }
 .books small { color: var(--subtle); font-weight: 500; margin-left: 4px; }
+.books > div { align-items: baseline; }
+.books dt { min-width: 0; }
+.books dd { flex: none; max-width: 55%; text-align: right; }
+.books dd > small { display: block; margin: 2px 0 0; }
+.settlement { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.settlement > *, .settlement .disclosure > * { min-width: 0; }
+.books-payouts { max-width: 100%; }
+.settlement .books-payouts table { width: 100%; min-width: 0; font-size: 12px; }
+.settlement .books-payouts th, .settlement .books-payouts td { padding: 10px 6px; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.settlement .books-payouts th:first-child, .settlement .books-payouts td:first-child { padding-left: 12px; }
 .books .warn dd { color: var(--warn); }
 
 .receipt-totals { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; margin: 4px 0 22px; }

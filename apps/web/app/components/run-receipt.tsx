@@ -48,8 +48,9 @@ export function UnservedOutcome({ bloc, you, paying }: { bloc: Bloc; you: Member
   return <div className="unserved-outcome">
     <p>{why} {released}</p>
     {view.low !== null && <p>Buyers in this Bloc were served at <strong>{range(view.low, view.high)}</strong>.</p>}
+    {bloc.scenario === "failure" ? <p className="muted">This demo is set up so that no seller can meet the group’s limits, so a new copy would end the same way. Try the successful deal from the Demo lab instead.</p> : <>
     <button type="button" className="button" disabled={busy} onClick={() => void again()}>{busy ? "Opening…" : "Join a new Bloc with a higher limit"} <ArrowRight size={14} aria-hidden="true" /></button>
-    <p className="muted">Optional. You choose the new limit and approve a new hold yourself; the slider starts at {usd(view.suggested)}. A new Bloc can clear at different prices.</p>
+    <p className="muted">Optional. You choose the new limit and approve a new hold yourself; the slider starts at {usd(view.suggested)}{view.lowestServed !== null ? `, just above the lowest maximum served here (${usd(view.lowestServed)})` : ""}. A new Bloc can clear at different prices.</p></>}
     {error && <p role="alert">{error}</p>}
   </div>;
 }

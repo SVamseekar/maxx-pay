@@ -235,6 +235,7 @@ fieldset { min-width: 0; }
 .room-metrics > div + div { border-left: 1px solid var(--line); }
 .room-metrics strong { font-weight: 500; font-size: 32px; }
 .room-grid { gap: 28px; grid-template-columns: minmax(270px, .8fr) minmax(0, 1.6fr); align-items: start; }
+.room-grid > * { min-width: 0; }
 .commit-panel { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 26px; box-shadow: none; }
 .commit-panel h2 { font-size: 25px; }
 .commit-panel > .badge { background: transparent; border: 0; padding-left: 0; }

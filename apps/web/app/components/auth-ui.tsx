@@ -29,7 +29,7 @@ export function AuthShell({ title, description, children, footer }: { title: str
       {description && <p className="auth-lede">{description}</p>}
       {children}
       {footer && <div className="auth-footer">{footer}</div>}
-      <p className="auth-mode-note">Prototype · simulated commitments · no live payments</p>
+      <p className="auth-mode-note">Prototype · test money only · no real payments</p>
     </motion.section>
   </main>;
 }

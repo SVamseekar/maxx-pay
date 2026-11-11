@@ -15,7 +15,7 @@ from maxx.config import settings
 from maxx.money import chain, checkout, ledger, service, webhooks
 from maxx.money.paypal import PayPalError, get_paypal
 from maxx.negotiate.contracts import BlocView, Money
-from maxx.negotiate.routes import RuntimeDep
+from maxx.negotiate.routes import RuntimeDep, ensure_may_take_part
 
 router = APIRouter(prefix="/money", dependencies=[Depends(same_origin)])
 hooks = APIRouter(prefix="/money")
@@ -75,6 +75,7 @@ async def create_hold(
         bloc = store.get(id)
     except KeyError:
         raise HTTPException(404, "Bloc not found.") from None
+    ensure_may_take_part(bloc, user.id)
     test_case = body.test_case if settings.paypal_negative_testing else ""
     if test_case not in {"", "capture_declined", "authorize_declined"}:
         raise HTTPException(422, "Unknown test case.")
@@ -124,8 +125,11 @@ async def authorize_hold(order_id: str, user: CurrentUser, runtime: RuntimeDep):
 @router.post("/holds/{order_id}/cancel")
 async def cancel_hold(order_id: str, user: CurrentUser):
     _require_enabled()
-    await service.cancel_unfinished(user.id, order_id)
-    return {"order_id": order_id, "status": "CANCELLED"}
+    try:
+        status = await service.cancel_unfinished(user.id, order_id)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from None
+    return {"order_id": order_id, "status": status}
 
 
 def _receipt(payment: dict, titles: dict[str, str]) -> dict:

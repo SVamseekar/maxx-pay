@@ -130,10 +130,16 @@ class Bloc(BlocView):
         value["committed_total"] = str(sum((m.max_price for m in active), Decimal(0)))
         if self.target_price is not None:
             eligible = sum(m.max_price >= self.target_price for m in active)
+            # Once nobody is holding (a fresh Bloc, or one that has finished), a count of
+            # "0 of 0" says nothing, so the sentence is left out.
+            afford = (
+                f"{eligible} of {len(active)} active buyers can afford this target. "
+                if active
+                else ""
+            )
             value["target_reason"] = (
                 f"Median of trusted independent delivered USD prices: ${self.target_price:.2f}. "
-                f"{eligible} of {len(active)} active buyers can afford this target. "
-                "A reference target, not a guaranteed negotiated price."
+                f"{afford}A reference target, not a guaranteed negotiated price."
             )
         return value
 

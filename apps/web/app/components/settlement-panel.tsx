@@ -46,17 +46,23 @@ export default function SettlementPanel({ blocId, config, signedIn }: { blocId: 
     <div className="section-heading"><span><Landmark size={14} aria-hidden="true" /> Payment settlement</span><Badge tone={ledger.simulated ? "warn" : "accent"}>{ledger.simulated ? <><FlaskConical size={11} /> Simulated PayPal</> : "PayPal sandbox"}</Badge></div>
     {mine && <div className={`my-receipt status-${mine.status.toLowerCase()}`}>
       <div><span>Your hold</span><strong>{usd(mine.held)}</strong></div>
-      <div><span>You paid</span><strong>{mine.paid === null ? "—" : usd(mine.paid)}</strong></div>
-      <div><span>Kept in your pocket</span><strong>{mine.saved === null ? (mine.status === "VOIDED" ? usd(mine.held) : "—") : usd(mine.saved)}</strong></div>
+      {mine.status === "REFUNDED" ? <>
+        <div><span>Refunded to you</span><strong>{mine.paid === null ? "—" : usd(mine.paid)}</strong></div>
+        <div><span>Kept in your pocket</span><strong>{usd(mine.held)}</strong></div>
+      </> : <>
+        <div><span>You paid</span><strong>{mine.paid === null ? "—" : usd(mine.paid)}</strong></div>
+        <div><span>Kept in your pocket</span><strong>{mine.saved === null ? (mine.status === "VOIDED" ? usd(mine.held) : "—") : usd(mine.saved)}</strong></div>
+      </>}
       <p>{STATE_TEXT[mine.status] ?? mine.status}{mine.error && mine.status !== "VOIDED" ? ` · ${mine.error.toLowerCase().replaceAll("_", " ")}` : ""}.</p>
       <Link className="quiet-link" href="/receipts"><ReceiptIcon size={13} aria-hidden="true" /> All receipts and PayPal ids</Link>
     </div>}
     {order && <div className="notice-strip" role="status"><span><strong>{STATUS_LABEL[order.status]}.</strong> {order.status === "AWAITING_ADDRESS" ? "The seller can’t ship until you give a delivery address." : "Follow shipping and manage the order."} The seller, {order.seller.name}, ships and supports it; Maxx holds your payment until they do.</span> <Link className="quiet-link" href="/orders">Open your order</Link></div>}
     {working && <p className="muted small" role="status">{ledger.settlement === "WAITING" ? "Settlement starts when the negotiation ends." : "Settling with PayPal: capturing winners, releasing everyone else, paying sellers…"}</p>}
-    <Disclosure title={<>Group books · {ledger.holds} holds {ledger.reconciled && <span className="reconciled"><BadgeCheck size={13} aria-hidden="true" /> Reconciled</span>}</>} defaultOpen={!mine}>
+    <Disclosure title={<>Group books · {ledger.holds} {ledger.holds === 1 ? "hold" : "holds"} {ledger.reconciled && <span className="reconciled"><BadgeCheck size={13} aria-hidden="true" /> Reconciled</span>}</>} defaultOpen={!mine}>
       <dl className="books">
-        <div><dt>Captured from winners</dt><dd>{usd(ledger.captured_total)} <small>{ledger.captured_count} buyers</small></dd></div>
-        <div><dt>Holds released</dt><dd>{usd(ledger.voided_total)} <small>{ledger.voided_count} buyers</small></dd></div>
+        <div><dt>Captured from winners</dt><dd>{usd(ledger.captured_total)} <small>{ledger.captured_count} {ledger.captured_count === 1 ? "buyer" : "buyers"}</small></dd></div>
+        <div><dt>Holds released</dt><dd>{usd(ledger.voided_total)} <small>{ledger.voided_count} {ledger.voided_count === 1 ? "buyer" : "buyers"}</small></dd></div>
+        {ledger.refunded_count > 0 && <div><dt>Refunded to buyers</dt><dd>{usd(ledger.refunded_total)} <small>{ledger.refunded_count} {ledger.refunded_count === 1 ? "buyer" : "buyers"}</small></dd></div>}
         {Number(ledger.held_for_shipping) > 0 && <div><dt>Held until the seller ships</dt><dd>{usd(ledger.held_for_shipping)}</dd></div>}
         <div><dt>Maxx fee ({config.platform_fee_percent}%, from sellers{Number(ledger.held_for_shipping) > 0 ? ", taken at payout" : ""})</dt><dd>{usd(ledger.platform_fee)}</dd></div>
         <div><dt>Paid to sellers</dt><dd>{usd(ledger.seller_payouts)}</dd></div>
@@ -64,9 +70,9 @@ export default function SettlementPanel({ blocId, config, signedIn }: { blocId: 
           <div><dt>PayPal fees, paid by Maxx out of its fee</dt><dd>{usd((Number(ledger.paypal_capture_fees) + Number(ledger.paypal_payout_fees)).toFixed(2))} <small>{usd(ledger.paypal_capture_fees)} on captures · {usd(ledger.paypal_payout_fees)} on payouts{ledger.paypal_fees_unknown > 0 ? ` · ${ledger.paypal_fees_unknown} not yet reported` : ""}</small></dd></div>
           <div><dt>Maxx keeps</dt><dd>{usd(ledger.maxx_margin)}</dd></div>
         </>}
-        {ledger.failed_count > 0 && <div className="warn"><dt>Needs attention</dt><dd>{ledger.failed_count} payments failed</dd></div>}
+        {ledger.failed_count > 0 && <div className="warn"><dt>Needs attention</dt><dd>{ledger.failed_count} {ledger.failed_count === 1 ? "payment" : "payments"} failed</dd></div>}
       </dl>
-      {ledger.payouts.length > 0 && <table><thead><tr><th>Seller</th><th>Units</th><th>Gross</th><th>Fee</th><th>Net</th><th>Status</th></tr></thead><tbody>{ledger.payouts.map(row => <tr key={row.seller}><td>{row.seller}</td><td>{row.units}</td><td>{usd(row.gross)}</td><td>{usd(row.fee)}</td><td>{usd(row.net)}</td><td>{row.status === "SENT" ? "Sent" : row.status.toLowerCase()}</td></tr>)}</tbody></table>}
+      {ledger.payouts.length > 0 && <div className="table-wrap books-payouts"><table><thead><tr><th>Seller</th><th>Units</th><th>Gross</th><th>Fee</th><th>Net</th><th>Status</th></tr></thead><tbody>{ledger.payouts.map(row => <tr key={row.seller}><td>{row.seller}</td><td>{row.units}</td><td>{usd(row.gross)}</td><td>{usd(row.fee)}</td><td>{usd(row.net)}</td><td>{row.status === "SENT" ? "Sent" : row.status.toLowerCase()}</td></tr>)}</tbody></table></div>}
       <p className="small muted">Every dollar captured is Maxx’s fee, a seller payout, or held by Maxx until the seller ships. “Reconciled” means those lines add up to the captured total exactly{ledger.simulated ? ", here against the simulator’s ledger" : ", with PayPal ids behind each line"}. PayPal’s own fees are the ones PayPal reports on each capture and payout{ledger.simulated ? " (the simulator uses the US sandbox rates)" : ""}. The simulated crowd seeded into demo Blocs places no holds: only real people’s PayPal holds appear here.</p>
       {mine && <p className="small muted">Your PayPal ids: order {shortId(mine.paypal.order)} · authorization {shortId(mine.paypal.authorization)} · capture {shortId(mine.paypal.capture)}</p>}
     </Disclosure>

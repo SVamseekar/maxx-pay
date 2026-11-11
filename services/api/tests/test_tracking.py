@@ -16,6 +16,7 @@ from maxx.main import app
 from maxx.notify import service as notify
 from maxx.sellers import store as sellers
 from tests.conftest import sign_up
+from tests.marketplace import second_bloc
 from tests.test_fulfilment import Market, payout_for
 from tests.test_fulfilment import runtime as runtime  # noqa: F401 - shared fixture
 
@@ -93,7 +94,7 @@ def test_a_malformed_or_reused_tracking_number_is_refused(tracked):
     # Another buyer's order may not reuse the same parcel number.
     with TestClient(app) as other:
         sign_up(other, "buyer2@example.com", "Cy Buyer")
-        second = tracked.run("demo-flaky", other)
+        second = tracked.run(second_bloc(tracked.runtime), other)
         other.post(f"/orders/{second['id']}/address", json={"address_id": tracked.address(other)})
         reused = ship(tracked, order_id=second["id"])
         assert reused.status_code == 409 and "already used" in reused.json()["detail"]

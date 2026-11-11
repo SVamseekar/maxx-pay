@@ -69,8 +69,9 @@ class Strict(BaseModel):
 class ProposeRequest(Strict):
     item_title: str = Field(min_length=3, max_length=300)
     qty: int = Field(default=1, ge=1, le=20)
-    current_price: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=2)
-    rows: list[PriceRow] = Field(max_length=8)
+    # The scan's own offers, sealed by the server when it answered the scan. The browser cannot
+    # change a price, a stock flag or the "same item" check without breaking the seal.
+    offers_seal: str = Field(max_length=24000)
 
 
 class ConfirmRequest(Strict):
@@ -105,10 +106,41 @@ def unseal(token: str, user_id: str) -> dict:
     return proposal
 
 
+SCAN_OFFERS_MINUTES = 60
+
+
+def seal_offers(rows: list, current_price: Decimal | None) -> str:
+    """Seal a scan's offers as the server found them, for a checkout proposal later."""
+    return seal(
+        {
+            "kind": "scan-offers",
+            "rows": [PriceRow.model_validate(row).model_dump(mode="json") for row in rows][:8],
+            "current_price": str(current_price) if current_price is not None else None,
+            "expires": int(time.time()) + SCAN_OFFERS_MINUTES * 60,
+        }
+    )
+
+
+def unseal_offers(token: str) -> tuple[list[PriceRow], Decimal | None]:
+    payload, _, mac = token.partition(".")
+    if not payload or not hmac.compare_digest(mac, _mac(payload.encode())):
+        raise Refused("These offers did not come from a Maxx scan. Scan the item again.")
+    sealed = json.loads(base64.urlsafe_b64decode(payload))
+    if sealed.get("kind") != "scan-offers":
+        raise Refused("These offers did not come from a Maxx scan. Scan the item again.")
+    if sealed["expires"] < time.time():
+        raise Refused("This scan is over an hour old. Scan the item again for current prices.")
+    current = sealed["current_price"]
+    return [PriceRow.model_validate(row) for row in sealed["rows"]], (
+        Decimal(current) if current is not None else None
+    )
+
+
 def propose(user_id: str, request: ProposeRequest) -> dict:
     """Pick the cheapest trustworthy offer. Only verified, in-stock, fully priced rows qualify."""
+    rows, current_price = unseal_offers(request.offers_seal)
     candidates = []
-    for row in request.rows:
+    for row in rows:
         if (
             row.same_item
             and row.in_stock
@@ -121,7 +153,7 @@ def propose(user_id: str, request: ProposeRequest) -> dict:
         raise Refused("No verified in-stock offer with a known delivered price. Nothing to buy.")
     unit, best = min(candidates, key=lambda c: c[0])
     total = (unit * request.qty).quantize(CENTS)
-    if request.current_price is not None and unit >= request.current_price:
+    if current_price is not None and unit >= current_price:
         raise Refused("No offer is cheaper than the price you were looking at.")
     limit = subscriptions.checkout_limit(user_id)
     if total > Decimal(limit):
@@ -137,8 +169,8 @@ def propose(user_id: str, request: ProposeRequest) -> dict:
         "total": str(total),
         "currency": settings.paypal_currency,
         "evidence": best.evidence[:300],
-        "saves": str((request.current_price - unit).quantize(CENTS) * request.qty)
-        if request.current_price
+        "saves": str((current_price - unit).quantize(CENTS) * request.qty)
+        if current_price
         else None,
         "expires": int(time.time()) + settings.checkout_proposal_minutes * 60,
     }
@@ -191,6 +223,13 @@ async def create_order(
     # One open order per offer: confirming twice returns the first order instead of a second charge.
     for existing in ledger.for_user(user_id):
         details = info(existing)
+        if (
+            existing["kind"] == "checkout"
+            and details.get("offer") == digest
+            and existing["status"] in {"CAPTURED", "REFUNDED"}
+        ):
+            # Paid already, by either method: confirming again must not open a second order.
+            raise Refused("You already bought this offer. It is in your receipts.")
         if (
             existing["kind"] == "checkout"
             and details.get("offer") == digest

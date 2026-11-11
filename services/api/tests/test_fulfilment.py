@@ -19,7 +19,7 @@ from maxx.negotiate.routes import Runtime, get_runtime
 from maxx.negotiate.store import BlocStore
 from maxx.sellers import store as sellers
 from tests.conftest import sign_up
-from tests.marketplace import ADDRESS, buy, offer, onboard, wait_settled
+from tests.marketplace import ADDRESS, buy, offer, onboard, second_bloc, wait_settled
 
 
 @pytest.fixture
@@ -140,10 +140,12 @@ def test_books_show_paypal_fees_paid_out_of_the_maxx_fee(market):
     # The simulator charges the US sandbox rates: 3.49% + $0.49 on the $100 capture.
     assert books["platform_fee"] == "8.00" and books["paypal_capture_fees"] == "3.98"
     assert books["paypal_payout_fees"] == "0.00"  # PayPal has not reported the payout item yet
+    assert books["paypal_fees_unknown"] == 1  # and the books say so
     assert asyncio.run(fulfilment.refresh_payouts()) == 1
     assert payout_for(market.order["id"])["paypal_fee"] == Decimal("0.25")
     books = market.buyer.get("/money/blocs/demo-success/ledger").json()
     assert books["paypal_payout_fees"] == "0.25" and books["maxx_margin"] == "3.77"
+    assert books["paypal_fees_unknown"] == 0
     assert books["reconciled"] is True  # PayPal's fees never change the seller's share
 
 
@@ -195,7 +197,8 @@ def test_buyer_can_cancel_before_shipping_and_gets_a_full_refund(market):
     assert ship(market).status_code == 409 and payout_for(market.order["id"]) is None
     books = market.buyer.get("/money/blocs/demo-success/ledger").json()
     assert books["refunded_total"] == "100.00" and Decimal(books["seller_payouts"]) == 0
-    assert market.buyer.post(f"/orders/{market.order['id']}/cancel").status_code == 409
+    twice = market.buyer.post(f"/orders/{market.order['id']}/cancel")
+    assert twice.status_code == 409 and "already cancelled" in twice.json()["detail"]
 
 
 def test_no_address_in_time_cancels_and_refunds(market):
@@ -262,6 +265,11 @@ def test_a_problem_after_shipping_pauses_nothing_already_paid_but_a_refund_is_re
     assert ledger.by_order(market.hold_id)["status"] == "REFUNDED"
     assert orders.get_order(market.order["id"])["status"] == "REFUNDED"
     assert orders.owed_by(market.code) == Decimal("92.00")  # paid out earlier, so owed back
+    # The payout's PayPal fee was spent when it went out; a later refund does not undo it.
+    assert asyncio.run(fulfilment.refresh_payouts()) >= 0
+    books = market.buyer.get("/money/blocs/demo-success/ledger").json()
+    assert books["refunded_count"] == 1 and books["refunded_total"] == "100.00"
+    assert books["paypal_payout_fees"] == "0.25"
 
 
 def test_what_a_seller_owes_is_taken_from_the_next_payout(market, runtime):
@@ -279,7 +287,7 @@ def test_what_a_seller_owes_is_taken_from_the_next_payout(market, runtime):
     # A second sale from another Bloc: its payout first repays the debt.
     with TestClient(app) as second:
         sign_up(second, "buyer2@example.com", "Cy Buyer")
-        order2 = market.run("demo-flaky", second)
+        order2 = market.run(second_bloc(runtime), second)
         second.post(f"/orders/{order2['id']}/address", json={"address_id": market.address(second)})
         assert ship(market, order2["id"], "1Z12345E6605272234").status_code == 200
     payout = payout_for(order2["id"])

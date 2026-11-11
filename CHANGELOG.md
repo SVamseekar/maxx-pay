@@ -25,6 +25,14 @@ numbered releases yet; chapters are named by date and purpose.
 - A separate hosted demo at https://pay.souravamseekar.com on its own servers and database, and a
   live end-to-end run recorded with PayPal ids
   ([`eb9e579`](https://github.com/SVamseekar/maxx-pay/commit/eb9e579)).
+- **Everyday groups** on Blocs and the demo lab: ten made-up everyday products (skillet, air
+  fryer, stand mixer, air purifier, laundry pods, sonic toothbrush, diapers, travel stroller, dog
+  food, headphones), each opening the person's own practice Bloc with a simulated crowd and seller
+  agents. Typical prices are illustrative and based on ordinary US prices; consumables show a unit
+  price. "Show me something else" picks one at random and says so. Original illustrative artwork
+  for each product, also shown on Bloc cards and in the room header.
+- The three shared demo scenarios each show a different product: headphones (successful deal),
+  a stand mixer (no deal) and an air purifier (seller withdrawal).
 
 ### Changed
 
@@ -37,6 +45,11 @@ numbered releases yet; chapters are named by date and purpose.
   model, decides who is served ([`fcf7b27`](https://github.com/SVamseekar/maxx-pay/commit/fcf7b27)).
 - `render.yaml` describes this entry's own service on the PayPal sandbox
   ([`8827101`](https://github.com/SVamseekar/maxx-pay/commit/8827101)).
+- Agent checkout only buys from offers the server sealed in the scan answer (`offers_seal`); a
+  price or stock flag changed in the browser is refused.
+- "Join a new Bloc with a higher limit" now starts the slider just above the lowest maximum that
+  was served, and the no-deal demo no longer offers a new copy that would fail the same way.
+- Wording that said "simulated" on the sandbox site now holds in both payment modes.
 
 ### Fixed
 
@@ -50,6 +63,20 @@ numbered releases yet; chapters are named by date and purpose.
   subscription payment is recorded ([`21545d6`](https://github.com/SVamseekar/maxx-pay/commit/21545d6)).
 - A payout batch still `PROCESSING` is no longer marked failed
   ([`8827101`](https://github.com/SVamseekar/maxx-pay/commit/8827101)).
+- A judge's private demo copy could take another person's hold, and real sellers saw and bid into
+  it. Only its owner can now hold, join or close it, and sellers never see it.
+- In live mode the seller model could ignore the withdrawal scenario's scripted exit; code now
+  enforces it.
+- The settlement panel overflowed its card, and on a phone the outcome card was cut off.
+- Refunds showed as "Paid" in receipts and the room; the group books now list refunds.
+- The closing round showed a message to every seller although none was asked.
+- Confirming an already-paid checkout offer again created a phantom receipt.
+- PayPal's payout fee dropped out of the books after a refund; a fee not yet reported is counted.
+- Admin reconcile compared payments made in another payment mode.
+- Cancelling someone else's unfinished hold answered "cancelled"; cancelling an order twice said
+  it had shipped.
+- My Blocs said "Left" for demo copies never joined; "0 of 0 active buyers" on finished Blocs;
+  wrong plurals ("1 buyers", "1 days").
 
 ## 24 to 30 October 2026: AI guardrails, judge entry and price search
 

@@ -11,10 +11,11 @@ import { useQuery } from "../lib/use-query";
 import { AppFooter, Badge, ErrorNotice, PageIntro, Working } from "../components/ui";
 import SellerTour from "../components/seller-tour";
 import { useServerReady } from "../components/server-wake";
+import EverydayGroups from "../components/everyday-groups";
 const scenarios = [
   { id: "success", title: "Find common ground.", label: "Successful deal", description: "Watch seller offers compete, then see the group receive allocations within each buyer’s limit.", icon: Check },
   { id: "failure", title: "Know when to walk.", label: "No deal", description: "When offers cannot meet the group’s limits, Maxx ends the negotiation and releases commitments.", icon: ShieldCheck },
-  { id: "flaky", title: "Adapt in real time.", label: "Seller withdrawal", description: "A seller leaves the table. Follow how the negotiation adjusts to the remaining offers and capacity.", icon: UserMinus },
+  { id: "flaky", title: "Adapt in real time.", label: "Seller withdrawal", description: "One simulated seller is set to leave in round 2. Follow how the negotiation adjusts to the remaining offers and capacity.", icon: UserMinus },
 ];
 type Modes = { scan: string; negotiation: string; matching: string };
 type Models = { vision: string; negotiator: string; seller: string; embed: string };
@@ -67,6 +68,7 @@ export default function Judge() {
     <section className="bloc-grid" aria-label="Demo scenarios">{scenarios.map(s=><article key={s.id} className="bloc-card scenario-card"><div className="card-top"><div className="scenario-icon"><s.icon size={24} /></div><Badge>{s.label}</Badge></div><h2>{s.title}</h2><p>{s.description}</p>{!ready?<button className="primary" disabled>Waking server…</button>:status==="ready"&&!user?(entry?<button className="primary" disabled>Enter above to try this</button>:<Link className="button primary" href={loginPath("/judge")}>Sign in to try this <ArrowUpRight size={15} /></Link>):<button className="primary" disabled={busy||status==="loading"} onClick={()=>void enter(s.id)}>Try {s.label.toLowerCase()} <ArrowUpRight size={15} /></button>}</article>)}</section>
     {busy&&<Working label="Preparing your demo" />}{resetDone&&<p className="reset-success" role="status">Shared demo Blocs restored.</p>}
     {user?.is_admin && <div className="demo-controls"><button disabled={busy} onClick={()=>void reset()}><RefreshCw size={14} /> Reset shared demo Blocs</button><p>Restores the three listed demo Blocs: 600 simulated buyers in the successful deal, 100 in each of the others, eight simulated sellers each. Judges’ private copies and custom Blocs stay in place. Active negotiations must finish first.</p></div>}
+    <EverydayGroups from="/judge" />
     <SellerTour />
     <Link className="button secondary" href="/scan">Start with your own screenshot <ArrowUpRight size={15} /></Link><AppFooter /></main>;
 }

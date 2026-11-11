@@ -1,6 +1,7 @@
 export type ScanResult = {
   request_id: string;
   open_bloc_id: string | null;
+  offers_seal?: string | null;
   mode: "live" | "fixture";
   item: { title: string | null; price: string | null; currency: string | null; merchant: string | null; variant: string | null; confidence: number };
   rows: { title: string; url: string; price: string; shipping: string | null; same_item: boolean; in_stock: boolean; evidence: string }[];

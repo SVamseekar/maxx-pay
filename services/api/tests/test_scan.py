@@ -102,6 +102,11 @@ def test_fixture_end_to_end(monkeypatch):
         assert result["mode"] == "fixture"
         assert result["item"] == case["item"]
         assert result["calls"] == []
+        # The offers come back sealed, so agent checkout can trust exactly these rows.
+        from maxx.money import checkout
+
+        sealed_rows, _ = checkout.unseal_offers(result["offers_seal"])
+        assert [str(r.price) for r in sealed_rows] == [str(r["price"]) for r in result["rows"]]
         if case["name"] in ["unreadable", "non-usd"]:
             assert result["score"]["value"] is None
             assert result["recommendation"]["primary"] == "WAIT"

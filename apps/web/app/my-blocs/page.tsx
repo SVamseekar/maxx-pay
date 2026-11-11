@@ -32,12 +32,14 @@ export default function MyBlocs() {
     {blocs && blocs.length > 0 && <><FilterToolbar query={query} onQuery={setQuery} filter={filter} onFilter={setFilter} options={[{value:"all",label:"All Blocs"},{value:"active",label:"Active"},{value:"completed",label:"Completed"}]} count={visible.length} label="Search your Blocs" />{visible.length === 0 && <div className="empty-state"><h2>No matching groups</h2><p>Try another product or reset the filters above.</p></div>}</>}
     <section className="bloc-grid" aria-label="Your Blocs">{visible.map(bloc => {
       const mine = [...bloc.members].reverse().find(member => member.user_id === "me" && member.status !== "LEFT");
+      const everJoined = bloc.members.some(member => member.user_id === "me");
+      const open = bloc.status === "OPEN" || bloc.status === "FORMING";
       return <Link key={bloc.id} className="bloc-card" href={`/blocs/${bloc.id}/room`}>
         <div className="card-top"><ProductIdentity title={bloc.title} /><Badge tone={bloc.status === "OPEN" ? "good" : bloc.status === "FAILED" ? "warn" : "accent"}>{statusLabel(bloc.status)}</Badge></div>
         <h2>{bloc.title}</h2>
-        <p className="scenario-label">{bloc.viewer_is_owner ? "You created this Bloc" : "You joined this Bloc"}</p>
-        <div className="card-price"><div><span>Your maximum</span><strong>{mine ? usd(mine.max_price) : "Left"}</strong></div><div><span>{mine?.status === "WIN" ? "You paid" : "Typical price"}</span><strong>{usd(mine?.status === "WIN" ? mine.final_price : bloc.typical_price)}</strong></div></div>
-        <p>{mine?.status === "WIN" ? `Allocated from seller ${mine.seller_id}. Check Receipts for payment details.` : mine?.status === "BELOW_CLEARING" ? "Your maximum could not secure an allocation." : mine?.status === "RELEASED" ? "Commitment released. No deal this time." : mine ? "Waiting for the negotiation." : "You are no longer in this Bloc."}</p>
+        <p className="scenario-label">{bloc.viewer_is_owner ? (bloc.id.startsWith("lab-") ? "Your private demo copy" : "You created this Bloc") : "You joined this Bloc"}</p>
+        <div className="card-price"><div><span>Your maximum</span><strong>{mine ? usd(mine.max_price) : everJoined ? "Left" : "Not set"}</strong></div><div><span>{mine?.status === "WIN" ? "You paid" : "Typical price"}</span><strong>{usd(mine?.status === "WIN" ? mine.final_price : bloc.typical_price)}</strong></div></div>
+        <p>{mine?.status === "WIN" ? `Allocated from seller ${mine.seller_id}. Check Receipts for payment details.` : mine?.status === "BELOW_CLEARING" ? "Your maximum could not secure an allocation." : mine?.status === "RELEASED" ? "Commitment released. No deal this time." : mine ? "Waiting for the negotiation." : !everJoined ? (open ? "You have not joined yet. Set your maximum in the room." : "You did not join before it closed.") : "You are no longer in this Bloc."}</p>
         <div className="card-link">Open negotiation room <ArrowUpRight size={17} /></div>
       </Link>;
     })}</section>

@@ -235,6 +235,8 @@ def attach(bloc: Bloc) -> int:
     """
     from maxx.sellers import lifecycle
 
+    if bloc.id.startswith("lab-") or bloc.product_key.startswith("demo-lab:"):
+        return 0  # a judge's private lab copy keeps exactly its scripted sellers
     s, o = schema.sellers.c, schema.seller_offers.c
     with _engine().connect() as db:
         rows = db.execute(

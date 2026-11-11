@@ -12,6 +12,7 @@ import { Badge } from "./ui";
 import { FormMessage } from "./auth-ui";
 import AddressForm from "./address-form";
 import TrackingTimeline from "./tracking-timeline";
+import { counted } from "../presentation";
 
 const TONE = { AWAITING_ADDRESS: "warn", AWAITING_SHIPMENT: "accent", SHIPPED: "accent", DELIVERED: "good", CANCELLED: "neutral", REFUNDED: "neutral" } as const;
 
@@ -56,7 +57,7 @@ export default function OrderCard({ order, addresses, onChange, onAddress }: { o
       <button type="button" className="quiet-button" onClick={() => void showTrader()}><Building2 size={14} aria-hidden="true" /> Seller details <ChevronDown size={13} aria-hidden="true" /></button>
     </div>
 
-    {trader && <dl className="trader-info">{trader.simulated && <div><dt>Note</dt><dd>This is a simulated seller in the Maxx demo, not a real business.</dd></div>}<div><dt>Seller</dt><dd>{trader.business_name} ({trader.business_type === "company" ? "company" : "individual"})</dd></div><div><dt>Legal name</dt><dd>{trader.legal_name}</dd></div><div><dt>Address</dt><dd>{trader.address}</dd></div><div><dt>Contact</dt><dd>{trader.support_email} · {trader.phone}</dd></div>{trader.trade_register_no && <div><dt>Register number</dt><dd>{trader.trade_register_no}</dd></div>}{trader.website && <div><dt>Website</dt><dd>{trader.website}</dd></div>}<div><dt>Ships within</dt><dd>{trader.ship_within_days} days</dd></div><div><dt>Returns</dt><dd>{trader.return_days} days · {trader.return_policy}</dd></div><div><dt>Certification</dt><dd>{trader.self_certified ? "The seller certified it sells only lawful, genuine, new goods." : "Not certified"}</dd></div></dl>}
+    {trader && <dl className="trader-info">{trader.simulated && <div><dt>Note</dt><dd>This is a simulated seller in the Maxx demo, not a real business.</dd></div>}<div><dt>Seller</dt><dd>{trader.business_name} ({trader.business_type === "company" ? "company" : "individual"})</dd></div><div><dt>Legal name</dt><dd>{trader.legal_name}</dd></div><div><dt>Address</dt><dd>{trader.address}</dd></div><div><dt>Contact</dt><dd>{[trader.support_email, trader.phone].filter(Boolean).join(" · ") || "Through Maxx: open a problem on this order"}</dd></div>{trader.trade_register_no && <div><dt>Register number</dt><dd>{trader.trade_register_no}</dd></div>}{trader.website && <div><dt>Website</dt><dd>{trader.website}</dd></div>}<div><dt>Ships within</dt><dd>{counted(trader.ship_within_days, "day")}</dd></div><div><dt>Returns</dt><dd>{counted(trader.return_days, "day")} · {trader.return_policy}</dd></div><div><dt>Certification</dt><dd>{trader.self_certified ? "The seller certified it sells only lawful, genuine, new goods." : "Not certified"}</dd></div></dl>}
 
     {reporting && !active && <form className="problem-form" onSubmit={event => { event.preventDefault(); void run(() => request(`/api/orders/${order.id}/problem`, { body: { kind, message } }), "Reported. The seller must reply within 24 hours or you are refunded.").then(() => { setReporting(false); setMessage(""); }); }}>
       <label className="select-field">What went wrong?<select value={kind} onChange={event => setKind(event.target.value)}>{Object.entries(CASE_KINDS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>

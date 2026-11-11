@@ -68,6 +68,27 @@ def test_each_judge_gets_a_private_scenario_with_a_labelled_crowd(runtime, monke
         assert joined.status_code == 200, joined.text
         mine = [m for m in joined.json()["members"] if m["user_id"] == "me"]
         assert len(mine) == 1 and not mine[0]["simulated"]
+        # Nobody else can take part in a judge's private copy.
+        assert other.post(f"/blocs/{bloc_id}/join", json={"max_price": "150"}).status_code == 403
+        assert other.post(f"/blocs/{bloc_id}/start").status_code == 403
+
+
+def test_a_private_lab_copy_takes_no_one_elses_hold(runtime, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(settings, "paypal_mode", "simulator")
+    with TestClient(app) as judge, TestClient(app) as other:
+        sign_up(judge, "judge@example.com", "Jude")
+        sign_up(other, "other@example.com", "Otto")
+        bloc_id = judge.post("/demo/lab/success").json()["bloc_id"]
+        refused = other.post(f"/money/blocs/{bloc_id}/hold", json={"max_price": "150"})
+        assert refused.status_code == 403, refused.text
+        own = judge.post(f"/money/blocs/{bloc_id}/hold", json={"max_price": "150"})
+        assert own.status_code == 200, own.text
+        order_id = own.json()["order_id"]
+        # Someone else cannot cancel it, and a cancel reports what really happened.
+        assert other.post(f"/money/holds/{order_id}/cancel", json={}).status_code == 404
+        first = judge.post(f"/money/holds/{order_id}/cancel", json={}).json()
+        assert first["status"] == "CANCELLED"
+        assert judge.post(f"/money/holds/{order_id}/cancel", json={}).json()["status"] == "FAILED"
 
 
 def test_live_negotiation_without_ai_runs_the_labelled_replay(runtime, monkeypatch):  # noqa: F811

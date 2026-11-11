@@ -533,7 +533,9 @@ def opportunities(user: CurrentUser, runtime: RuntimeDep):
     now = int(time.time())
     seen: dict[str, dict] = {}
     for bloc in runtime.store.list_open():
-        if bloc.origin == "demo_tour" or (bloc.closes_at and bloc.closes_at <= now):
+        if bloc.origin == "demo_tour" or bloc.product_key.startswith("demo-lab:"):
+            continue  # tours and judges' private lab copies are never open to real sellers
+        if bloc.closes_at and bloc.closes_at <= now:
             continue
         demand = _demand(bloc)
         if demand["buyers"] == 0:

@@ -64,8 +64,18 @@ def test_pay_with_pyusd_end_to_end_on_the_simulated_chain():
         assert payment["status"] == "CAPTURED" and str(payment["captured_amount"]) == "125.00"
         receipt = client.get("/money/receipts").json()[0]
         assert receipt["method"] == "pyusd" and receipt["paypal"]["pyusd_tx"] == sent["tx_hash"]
-        # Same order again is a harmless repeat; the transaction cannot pay a second order.
-        again = start(client).json()
+        # The paid offer cannot be confirmed again.
+        assert start(client).status_code == 409
+        # A fresh offer for the same item is a new order; the transaction cannot pay it too.
+        fresh = client.post("/checkout/propose", json=body(row(), current="151.00")).json()
+        again = client.post(
+            "/checkout/confirm",
+            json={
+                "proposal_token": fresh["proposal_token"],
+                "confirm_total": "125.00",
+                "method": "pyusd",
+            },
+        ).json()
         assert again["order_id"] != order["order_id"]
         reuse = client.post(
             "/checkout/pyusd/verify",

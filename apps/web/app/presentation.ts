@@ -34,3 +34,8 @@ export function needsRoomSnapshot(type: string) {
 export function statusLabel(status: string) {
   return ({ FORMING: "Forming", OPEN: "Open to join", NEGOTIATING: "Negotiating", SETTLED: "Deal settled", FAILED: "No deal" } as Record<string, string>)[status] ?? status;
 }
+
+/** "1 buyer", "2 buyers": a count with the right noun. */
+export function counted(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
+}

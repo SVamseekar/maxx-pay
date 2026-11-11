@@ -89,3 +89,11 @@ def buy(buyer, bloc="demo-success", price="150"):
     buyer.post(f"/money/holds/{order['order_id']}/simulate-approve")
     assert buyer.post(f"/money/holds/{order['order_id']}/authorize").status_code == 200
     return order["order_id"]
+
+
+def second_bloc(runtime) -> str:
+    """Another open Bloc for the same product the test seller offers (the shared demo scenarios
+    each show a different product)."""
+    bloc = runtime.scenario_bloc("demo-second", "flaky", runtime.mode, "headphones")
+    runtime.store.create(bloc)
+    return bloc.id

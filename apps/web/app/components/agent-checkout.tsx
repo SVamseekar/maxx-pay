@@ -33,12 +33,12 @@ export default function AgentCheckout({ result }: { result: ScanResult }) {
   const [copied, setCopied] = useState(false);
   const eligible = result.rows.some(row => row.same_item && row.in_stock && row.shipping !== null);
   useEffect(() => { setOffer(null); setOrder(null); setDone(null); setRefusal(""); setError(""); setTyped(""); }, [result.request_id]);
-  if (!config?.enabled || !eligible) return null;
+  if (!config?.enabled || !eligible || !result.offers_seal) return null;
 
   async function propose() {
     setBusy(true); setError(""); setRefusal("");
     try {
-      setOffer(await request<Offer>("/api/checkout/propose", { body: { item_title: result.item.title ?? "Scanned item", qty: 1, current_price: result.item.currency === "USD" ? result.item.price : null, rows: result.rows.map(row => ({ title: row.title, url: row.url, price: row.price, shipping: row.shipping, same_item: row.same_item, in_stock: row.in_stock, evidence: row.evidence })) } }));
+      setOffer(await request<Offer>("/api/checkout/propose", { body: { item_title: result.item.title ?? "Scanned item", qty: 1, offers_seal: result.offers_seal } }));
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) { setRefusal("Sign in to let the agent buy for you."); return; }
       setRefusal(cause instanceof Error ? cause.message : "The agent could not make an offer.");

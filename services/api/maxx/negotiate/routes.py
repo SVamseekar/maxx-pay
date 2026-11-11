@@ -56,15 +56,20 @@ class Runtime:
         self.lock = asyncio.Lock()
 
     @staticmethod
-    def scenario_bloc(id: str, scenario: str, mode: str) -> Bloc:
+    def scenario_bloc(id: str, scenario: str, mode: str, product: str | None = None) -> Bloc:
         """A demo scenario with its simulated crowd. Seeded buyers are not people: they have no
-        account and no PayPal hold, and every view labels them as simulated."""
+        account and no PayPal hold, and every view labels them as simulated. Their limits spread
+        from the product's typical price down to 65% of it, in eight even steps."""
+        from maxx.demo import catalogue
+
+        item = catalogue.for_scenario(scenario, product)
         count = DEMO_CROWD[scenario]
-        b = make_bloc(id, "Demo headphones · Black", Decimal("200"), mode=mode, scenario=scenario)
+        b = make_bloc(id, item.title, item.typical, mode=mode, scenario=scenario)
         for seller in b.sellers:
             seller.stock = max(2, count // 4)
         for i in range(count):
-            add_member(b, f"seed-{scenario}-{i}", str(200 - (i % 8) * 10))
+            limit = (item.typical * (1 - Decimal("0.05") * (i % 8))).quantize(Decimal(".01"))
+            add_member(b, f"seed-{scenario}-{i}", str(limit))
         if mode != "fixture":
             # A web search for a made-up demo product finds nothing comparable; keep the labelled
             # fixture reference prices instead.
@@ -95,7 +100,7 @@ class Runtime:
         for b in self.store.list_by_status(["NEGOTIATING"]):
             if self.store.job_status(b.id) != "QUEUED":
                 terminal_failure(
-                    b, "API restarted during negotiation. All simulated commitments released."
+                    b, "API restarted during negotiation. Every hold and commitment was released."
                 )
                 self.store.save(b)
 
@@ -299,6 +304,19 @@ def get_bloc(runtime, id):
         raise HTTPException(404, "Bloc not found.") from None
 
 
+def is_private_copy(bloc) -> bool:
+    """A judge's own lab copy of a demo scenario: only its owner may hold, join or close it,
+    and no real seller ever sees it or bids into it."""
+    return bloc.id.startswith("lab-") or bloc.product_key.startswith("demo-lab:")
+
+
+def ensure_may_take_part(bloc, user_id: str) -> None:
+    if is_private_copy(bloc) and bloc.owner_id != user_id:
+        raise HTTPException(
+            403, "This is someone else's private demo copy. Open your own from the Demo lab."
+        )
+
+
 list_cache: dict = {}
 list_cache_lock = Lock()
 
@@ -474,6 +492,7 @@ def read_bloc(id: str, request: Request, runtime: RuntimeDep, user: OptionalUser
 @router.post("/blocs/{id}/join", response_model=BlocView)
 def join_bloc(id: str, body: Join, runtime: RuntimeDep, user: CurrentUser):
     b = get_bloc(runtime, id)
+    ensure_may_take_part(b, user.id)
     if settings.paypal_mode in {"simulator", "sandbox"}:
         # With payments on, joining means placing a PayPal hold first (see /money/blocs/{id}/hold).
         raise CodedError(402, "Place a PayPal hold to join this Bloc.", "payment_required")
@@ -504,6 +523,7 @@ async def leave_bloc(id: str, runtime: RuntimeDep, user: CurrentUser):
 @router.post("/blocs/{id}/start", response_model=BlocView, status_code=202)
 async def start_bloc(id: str, runtime: RuntimeDep, user: CurrentUser):
     b = get_bloc(runtime, id)
+    ensure_may_take_part(b, user.id)
     # Only the Bloc's creator or someone who has committed to it may close it.
     if b.owner_id != user.id and not any(
         m.user_id == user.id and m.status != "LEFT" for m in b.members
@@ -534,9 +554,11 @@ def bloc_again(id: str, runtime: RuntimeDep, user: CurrentUser):
         raise HTTPException(409, "You were served in this Bloc.")
     ratelimit.hit(f"bloc:{user.id}", settings.bloc_actions_per_hour, 3600)
     if b.id.startswith(SCENARIO_PREFIXES):
+        from maxx.demo import catalogue
         from maxx.demo.routes import lab_copy
 
-        return {"bloc_id": lab_copy(runtime, user.id, b.scenario)}
+        item = catalogue.BY_TITLE.get(b.title)
+        return {"bloc_id": lab_copy(runtime, user.id, b.scenario, item.id if item else None)}
     now = int(time.time())
     for existing in runtime.store.list():
         if (

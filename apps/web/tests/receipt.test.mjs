@@ -37,10 +37,12 @@ test("an unserved buyer sees their own reason, the prices that cleared, and a st
   const view = unservedView(bloc, members[2]);
   assert.equal(view.reason, "sold_out");
   assert.deepEqual([view.low, view.high], [150, 180]);
-  assert.equal(view.suggested, 161); // above their old maximum, never below the lowest cleared price
+  // Above the lowest maximum that was served ($190), since $161 or even $180 could lose again.
+  assert.equal(view.lowestServed, 190);
+  assert.equal(view.suggested, 191);
   const low = unservedView(bloc, members[3]);
   assert.equal(low.reason, "below_price");
-  assert.equal(low.suggested, 150);
+  assert.equal(low.suggested, 191);
 });
 
 test("an outcome saved before the receipt existed still renders", () => {

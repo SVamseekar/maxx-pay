@@ -128,7 +128,8 @@ async def _negotiate(store, id, adapter, round_delay, deadline):
                         message="Negotiator unavailable; using the fixed rule for this round.",
                     )
                 emit(bloc, "reserve_set", round=round, price=str(reserve))
-                for seller_id in plan.messages:
+                # A closing round asks no seller for anything, so no message is shown as sent.
+                for seller_id in [] if plan.close else plan.messages:
                     if seller_id in context["seller_ids"]:
                         emit(
                             bloc,
@@ -155,6 +156,10 @@ async def _negotiate(store, id, adapter, round_delay, deadline):
                         if seller.account_id and seller.agent == "rules":
                             # A real seller who chose fixed rules never has a model bid for them.
                             offer, clamped = safe_offer(seller, rules_bid(seller, current_round))
+                        elif not seller.account_id and seller.withdraw_round == current_round:
+                            # The withdrawal demo scripts one simulated seller to leave in a set
+                            # round. Code enforces it, so a live model cannot skip the script.
+                            offer, clamped = None, False
                         else:
                             private = seller_context(
                                 seller,
@@ -259,7 +264,9 @@ async def _negotiate(store, id, adapter, round_delay, deadline):
                     # asking; the offers already standing are cleared below.
                     break
             if not latest.allocations:
-                terminal_failure(bloc, "No qualifying deal. All simulated commitments released.")
+                terminal_failure(
+                    bloc, "No qualifying deal. Every hold and commitment was released."
+                )
             else:
                 bloc.outcome = latest
                 by_member = {a.member_id: a for a in latest.allocations}
@@ -298,11 +305,11 @@ async def _negotiate(store, id, adapter, round_delay, deadline):
     except (asyncio.CancelledError, Exception) as exc:
         if bloc.status == "NEGOTIATING":
             reason = (
-                "Negotiation timed out. All simulated commitments released."
+                "Negotiation timed out. Every hold and commitment was released."
                 if isinstance(exc, TimeoutError)
                 else (
                     "Negotiation interrupted or provider failed. "
-                    "All simulated commitments released."
+                    "Every hold and commitment was released."
                 )
             )
             terminal_failure(bloc, reason)

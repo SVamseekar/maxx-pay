@@ -7,6 +7,7 @@ import { type Bloc, type Member, usd } from "../blocs/types";
 import { activeBuyers, buyersAtOrAbove, chartDomain, demandSteps, median, percentBelow } from "../blocs/group";
 import { latestOffers } from "../presentation";
 import { AnimatedNumber, useMotionPreferences } from "./motion-system";
+import { counted } from "../presentation";
 
 const MAX_DOTS = 1500;
 
@@ -59,15 +60,15 @@ export default function GroupDemand({ bloc, you, order }: { bloc: Bloc; you?: Me
     event.preventDefault();
     setHover(Math.min(high, Math.max(low, next)));
   };
-  const summary = `${total} buyers. Median limit ${usd(median(limits))}.${yourLimit !== null ? ` Your limit of ${usd(yourLimit)} is higher than ${percentBelow(limits, yourLimit)}% of the group.` : ""}${best !== null ? ` ${at(best)} buyers have limits that cover the best seller offer of ${usd(best)}.` : ""}`;
+  const summary = `${counted(total, "buyer")}. Median limit ${usd(median(limits))}.${yourLimit !== null ? ` Your limit of ${usd(yourLimit)} is higher than ${percentBelow(limits, yourLimit)}% of the group.` : ""}${best !== null ? ` ${counted(at(best), "buyer")} ${at(best) === 1 ? "has a limit that covers" : "have limits that cover"} the best seller offer of ${usd(best)}.` : ""}`;
 
   return <motion.section layout="position" style={{ order }} className="group-panel" aria-label="Your group">
     <div className="group-head"><div><h2>Your group</h2><p>Every buyer sets a private maximum. This is how those limits stack up: the higher the price, the fewer buyers are still in.</p></div><span className="group-note"><Users size={13} aria-hidden="true" /> Aggregated · demo buyers are simulated</span></div>
     <p className="sr-only">{summary}</p>
     <div className="group-body">
       <div className="demand">
-        <div className="demand-y" aria-hidden="true"><span>{total} buyers</span><span>0</span></div>
-        <div className="demand-plot" role="slider" tabIndex={0} aria-label="Explore how many buyers would pay each price" aria-valuemin={Math.floor(low)} aria-valuemax={Math.ceil(high)} aria-valuenow={Math.round(shown ?? yourLimit ?? (low + high) / 2)} aria-valuetext={`At ${usd(shown ?? yourLimit ?? (low + high) / 2)}, ${at(shown ?? yourLimit ?? (low + high) / 2)} buyers would pay`} onPointerMove={move} onPointerDown={move} onPointerLeave={() => setHover(null)} onKeyDown={keys} onBlur={() => setHover(null)}>
+        <div className="demand-y" aria-hidden="true"><span>{counted(total, "buyer")}</span><span>0</span></div>
+        <div className="demand-plot" role="slider" tabIndex={0} aria-label="Explore how many buyers would pay each price" aria-valuemin={Math.floor(low)} aria-valuemax={Math.ceil(high)} aria-valuenow={Math.round(shown ?? yourLimit ?? (low + high) / 2)} aria-valuetext={`At ${usd(shown ?? yourLimit ?? (low + high) / 2)}, ${counted(at(shown ?? yourLimit ?? (low + high) / 2), "buyer")} would pay`} onPointerMove={move} onPointerDown={move} onPointerLeave={() => setHover(null)} onKeyDown={keys} onBlur={() => setHover(null)}>
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             <defs><linearGradient id={`${bloc.id}-area`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--accent)" stopOpacity=".34" /><stop offset="1" stopColor="var(--accent)" stopOpacity="0" /></linearGradient></defs>
             {[25, 50, 75].map(row => <line key={row} x1="0" x2="100" y1={row} y2={row} className="demand-grid" />)}

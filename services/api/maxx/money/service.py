@@ -191,10 +191,16 @@ async def leave(store, bloc: Bloc, user_id: str) -> None:
             await _void(pp, payment["id"], payment["authorization_id"], "left")
 
 
-async def cancel_unfinished(user_id: str, order_id: str) -> None:
+async def cancel_unfinished(user_id: str, order_id: str) -> str:
+    """Drop a hold the person never finished approving. Returns the payment's status afterwards,
+    so a hold that was already approved, charged or released is reported as it really is."""
     payment = ledger.by_order(order_id)
-    if payment and payment["user_id"] == user_id and payment["status"] in {"CREATED", "APPROVED"}:
+    if not payment or payment["user_id"] != user_id:
+        raise LookupError("Hold not found.")
+    if payment["status"] in {"CREATED", "APPROVED"}:
         ledger.update_payment(payment["id"], status="FAILED", error="cancelled")
+        return "CANCELLED"
+    return payment["status"]
 
 
 # ---- settlement -------------------------------------------------------------------------------
@@ -511,14 +517,14 @@ def reconcile(bloc_id: str, generation: int | None = None) -> dict:
 
     # PayPal's own fees come out of the Maxx fee, not the seller's share. A fee PayPal has not
     # reported yet is counted as unknown rather than guessed.
-    paid_out = [p for p in sent if p["status"] == "SENT"]
+    # A payout that went out cost its PayPal fee even if the order was refunded later, so the fee
+    # stays in the books while the payout itself becomes the seller's debt.
+    paid_out = [p for p in payouts if p["status"] == "SENT"]
     capture_fees = total(known(captured, "paypal_fee"), "paypal_fee")
     payout_fees = total(known(paid_out, "paypal_fee"), "paypal_fee")
     fees_unknown = sum(r.get("paypal_fee") is None and not r["simulated"] for r in captured)
-    fees_unknown += sum(
-        r.get("paypal_fee") is None and r["method"] == "paypal" and not r["simulated"]
-        for r in paid_out
-    )
+    # The simulator reports payout fees later too, so a missing one is counted as not yet known.
+    fees_unknown += sum(r.get("paypal_fee") is None and r["method"] == "paypal" for r in paid_out)
     platform_fee = total(live, "fee_amount")
     grouped: dict[str, dict] = {}
     for row in live:
@@ -597,6 +603,9 @@ async def verify_remote(limit: int = 200) -> dict:
                     schema.payments.c.kind == "hold",
                     schema.payments.c.authorization_id.is_not(None),
                     schema.payments.c.status.in_(list(expected)),
+                    # Only payments made through the client in use now: asking the simulator
+                    # about a sandbox payment (or the reverse) can only answer "not found".
+                    schema.payments.c.simulated.is_(bool(pp.simulated)),
                 )
                 .order_by(schema.payments.c.updated_at.desc())
                 .limit(limit)

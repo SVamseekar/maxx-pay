@@ -155,6 +155,17 @@ def test_opportunities_show_demand_without_naming_buyers(runtime):
     assert "user" not in str(demo).lower()
 
 
+def test_judges_private_lab_copies_are_not_seller_opportunities(runtime):
+    with TestClient(app) as judge, TestClient(app) as client:
+        sign_up(judge, "judge@example.com", "Jude")
+        lab = judge.post("/demo/lab/success").json()["bloc_id"]
+        sign_up(client)
+        onboard(client)
+        rows = client.get("/seller/opportunities").json()
+    assert lab not in {r["bloc_id"] for r in rows}
+    assert not any(r["product_key"].startswith("demo-lab:") for r in rows)
+
+
 def test_offer_rules(runtime):
     with TestClient(app) as client:
         sign_up(client)

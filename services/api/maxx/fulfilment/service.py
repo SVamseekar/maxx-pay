@@ -789,6 +789,8 @@ async def cancel_by_buyer(buyer_id: str, order_id: str) -> dict:
     order = store.get_order(order_id)
     if not order or order["buyer_id"] != buyer_id:
         raise LookupError("Order not found.")
+    if order["status"] in {"CANCELLED", "REFUNDED"}:
+        raise Refused("This order is already cancelled and refunded.")
     if order["status"] not in {"AWAITING_ADDRESS", "AWAITING_SHIPMENT"}:
         raise Refused("It has shipped, so open a problem instead of cancelling.")
     if not await refund_order(order, "cancelled by buyer", f"user:{buyer_id[:8]}", "CANCELLED"):

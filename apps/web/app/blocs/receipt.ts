@@ -36,11 +36,16 @@ export function runReceipt(bloc: ReceiptBloc) {
 /**
  * What a buyer this Bloc did not serve is shown: their own reason, the prices that cleared, and
  * where the limit slider starts in a new Bloc. The start is a suggestion the buyer can move: above
- * their old maximum, never below the lowest price that cleared, never above the typical price.
+ * their old maximum and above the lowest maximum that was served here (a tie goes to whoever
+ * joined first, so equal is not enough), never above the typical price. The lowest cleared price
+ * alone is not a useful start: units go to higher maximums first, so it can lose again.
  */
 export function unservedView(bloc: ReceiptBloc, you: Pick<Member, "id" | "max_price">) {
   const { low, high } = runReceipt(bloc);
   const reason = bloc.outcome?.reasons?.[you.id] ?? null;
-  const suggested = Math.min(Number(bloc.typical_price), Math.max(low ?? 0, Math.floor(Number(you.max_price)) + 1));
-  return { reason, low, high, suggested };
+  const served = bloc.members.filter(m => m.status === "WIN").map(m => Number(m.max_price));
+  const lowestServed = served.length ? Math.min(...served) : null;
+  const floor = lowestServed !== null ? Math.floor(lowestServed) + 1 : low ?? 0;
+  const suggested = Math.min(Number(bloc.typical_price), Math.max(floor, Math.floor(Number(you.max_price)) + 1));
+  return { reason, low, high, suggested, lowestServed };
 }

@@ -30,7 +30,9 @@ def row(price="120.00", shipping="5.00", host="shop.example", **extra):
 
 
 def body(*rows, current="150.00", qty=1):
-    return {"item_title": "Headphones", "qty": qty, "current_price": current, "rows": list(rows)}
+    """What the browser sends: the offers exactly as the server sealed them in the scan answer."""
+    sealed = checkout.seal_offers(list(rows), current and checkout.Decimal(current))
+    return {"item_title": "Headphones", "qty": qty, "offers_seal": sealed}
 
 
 def test_agent_tools_match_paypal_agent_toolkit_names():
@@ -140,6 +142,10 @@ def test_full_flow_charges_once_and_only_after_approval():
         receipts = client.get("/money/receipts").json()
         assert receipts[0]["kind"] == "checkout" and receipts[0]["title"] == "Headphones"
         assert user["id"] == payment["user_id"]
+        # Confirming the paid offer again opens no second order and adds no receipt.
+        again = client.post("/checkout/confirm", json=confirm)
+        assert again.status_code == 409 and "already bought" in again.json()["detail"]
+        assert len(client.get("/money/receipts").json()) == len(receipts)
 
 
 def test_guard_refuses_a_mismatched_amount():
@@ -147,3 +153,29 @@ def test_guard_refuses_a_mismatched_amount():
     with pytest.raises(checkout.Refused):
         checkout.guard(proposal, "125.00", amount=__import__("decimal").Decimal("125.05"))
     assert str(checkout.guard(proposal, "125.00")) == "125.00"
+
+
+def test_a_price_changed_in_the_browser_is_refused():
+    token = checkout.seal_offers([row("299.99", "0.00")], checkout.Decimal("349.99"))
+    payload, _, mac = token.partition(".")
+    import base64
+    import json
+
+    data = json.loads(base64.urlsafe_b64decode(payload))
+    data["rows"][0]["price"] = "1.00"
+    forged = base64.urlsafe_b64encode(json.dumps(data, sort_keys=True).encode()).decode()
+    with TestClient(app) as client:
+        sign_up(client)
+        refused = client.post(
+            "/checkout/propose",
+            json={"item_title": "Headphones", "qty": 1, "offers_seal": f"{forged}.{mac}"},
+        )
+        assert refused.status_code == 409 and "Maxx scan" in refused.json()["detail"]
+        # Rows typed by the browser are not accepted at all.
+        raw = {"item_title": "Headphones", "qty": 1, "rows": [row("1.00")], "offers_seal": token}
+        assert client.post("/checkout/propose", json=raw).status_code == 422
+
+
+def test_scan_answers_carry_sealed_offers_that_checkout_accepts():
+    rows, current = checkout.unseal_offers(checkout.seal_offers([row()], None))
+    assert str(rows[0].price) == "120.00" and current is None
