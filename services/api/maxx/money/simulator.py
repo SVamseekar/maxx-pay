@@ -149,6 +149,17 @@ class SimulatedPayPal:
 
         return self._once(request_id, make)
 
+    async def authorize_card(
+        self, amount: Decimal, reference: str, request_id: str, description: str
+    ) -> dict:
+        """The simulated twin of a one-call card hold: create, approve and authorize."""
+        order = await self.create_order(
+            amount, reference, f"{request_id}-order", description=description
+        )
+        self.approve(order["id"])
+        auth = await self.authorize_order(order["id"], f"{request_id}-auth")
+        return {"order_id": order["id"], "authorization_id": auth["authorization_id"]}
+
     async def capture_order(self, order_id: str, request_id: str) -> dict:
         def make():
             order = self._read(order_id)

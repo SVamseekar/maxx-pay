@@ -99,6 +99,8 @@ Checked on 8 Nov 2026: the v6 SDK popup opens and returns an approval, authorize
 | `PAYPAL_NEGATIVE_TESTING` | `false` | Shows the "Test a failure" menu |
 | `PAYPAL_SELLER_RECEIVER` | placeholder | Receiver for seller payouts for any simulated seller not listed in `PAYPAL_SELLER_RECEIVERS` |
 | `PAYPAL_SELLER_RECEIVERS` | empty | Optional sandbox account per simulated seller, `A=a@…,B=b@…`, so each seller agent's payouts land in its own PayPal account |
+| `PAYPAL_CALLS_PER_MINUTE` | 0 (no cap) | Spreads PayPal calls so at most this many go out a minute; the hosted demo uses 40 because the sandbox blocks an IP for 5 minutes after 50 |
+| `DEMO_BULK_TOKEN` | empty (off) | Turns on the scripted card-buyer tool (`POST /demo/bulk/buyer`, `/demo/bulk/addresses`): each call makes a guest test buyer and a real sandbox hold paid with PayPal's test card in one Orders call. Used to fill a shared demo Bloc with real sandbox holds; these buyers are test accounts, not people |
 | `PAYPAL_PLAN_WEEKLY`, `PAYPAL_PLAN_YEARLY` | empty | PayPal billing plan ids (sandbox) |
 | `CHECKOUT_MAX_AMOUNT`, `CHECKOUT_PREMIUM_MAX_AMOUNT` | `500`, `2000` | Agent checkout limits |
 | `SIMULATOR_WEBHOOK_SECRET` | published default | Must be changed in production if the simulator is on |

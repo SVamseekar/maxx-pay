@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import time
+from collections import deque
 from decimal import Decimal
 from typing import Any
 
@@ -62,6 +63,44 @@ class PayPalError(Exception):
         self.debug_id = debug_id
 
 
+class Pace:
+    """At most `per_minute` calls in any rolling minute; callers wait their turn in order."""
+
+    def __init__(self) -> None:
+        self.stamps: deque[float] = deque()
+        self.lock: asyncio.Lock | None = None
+
+    async def wait(self, per_minute: int) -> None:
+        if per_minute <= 0:
+            return
+        self.lock = self.lock or asyncio.Lock()
+        async with self.lock:
+            while True:
+                now = time.monotonic()
+                while self.stamps and now - self.stamps[0] >= 60:
+                    self.stamps.popleft()
+                if len(self.stamps) < per_minute:
+                    self.stamps.append(now)
+                    return
+                await asyncio.sleep(60 - (now - self.stamps[0]) + 0.05)
+
+
+# PayPal's sandbox test Visa. Only ever sent in sandbox mode, by the scripted card-buyer tool.
+SANDBOX_CARD = {
+    "number": "4111111111111111",
+    "expiry": "2030-12",
+    "security_code": "123",
+    "name": "Maxx Card Buyer",
+    "billing_address": {
+        "address_line_1": "1 Main St",
+        "admin_area_2": "San Jose",
+        "admin_area_1": "CA",
+        "postal_code": "95131",
+        "country_code": "US",
+    },
+}
+
+
 class PayPalClient:
     simulated = False
 
@@ -71,6 +110,7 @@ class PayPalClient:
         self.transport = transport
         self._token: tuple[str, float] | None = None
         self._lock = asyncio.Lock()
+        self._pace = Pace()
 
     def _http(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -102,6 +142,7 @@ class PayPalClient:
         mock: str | None = None,
         accept: tuple[int, ...] = (200, 201, 202, 204),
     ) -> dict[str, Any]:
+        await self._pace.wait(settings.paypal_calls_per_minute)
         headers = {"Authorization": f"Bearer {await self._access_token()}"}
         if request_id:
             headers["PayPal-Request-Id"] = request_id[:108]
@@ -173,6 +214,27 @@ class PayPalClient:
         # `mock` is a simulator-only switch; PayPal negative testing targets the capture call.
         order = await self._call("POST", "/v2/checkout/orders", body, request_id)
         return {"id": order["id"], "status": order.get("status", "CREATED")}
+
+    async def authorize_card(
+        self, amount: Decimal, reference: str, request_id: str, description: str
+    ) -> dict:
+        """One-call hold by card: an AUTHORIZE order paid with the sandbox test card."""
+        body = {
+            "intent": "AUTHORIZE",
+            "purchase_units": [
+                {
+                    "reference_id": reference[:256],
+                    "description": description[:127],
+                    "amount": {"currency_code": settings.paypal_currency, "value": money(amount)},
+                }
+            ],
+            "payment_source": {"card": SANDBOX_CARD},
+        }
+        order = await self._call("POST", "/v2/checkout/orders", body, request_id)
+        authorization = order["purchase_units"][0]["payments"]["authorizations"][0]
+        if authorization.get("status") not in {"CREATED", "PENDING"}:
+            raise PayPalError("PayPal did not authorize the card.", 422, "DECLINED")
+        return {"order_id": order["id"], "authorization_id": authorization["id"]}
 
     async def get_order(self, order_id: str) -> dict:
         order = await self._call("GET", f"/v2/checkout/orders/{order_id}")

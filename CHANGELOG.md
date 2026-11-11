@@ -36,6 +36,10 @@ numbered releases yet; chapters are named by date and purpose.
 - Each simulated seller agent can be paid into its own PayPal sandbox account
   (`PAYPAL_SELLER_RECEIVERS`), so payouts fan out to several sellers instead of one shared
   receiver.
+- A scripted card-buyer tool fills a shared demo Bloc with real PayPal sandbox holds: each
+  guest test buyer's hold is one Orders call paid with PayPal's sandbox test card, then
+  settles, ships and pays out like any other order. PayPal calls are paced
+  (`PAYPAL_CALLS_PER_MINUTE`) to stay under the sandbox's per-minute limit.
 
 ### Changed
 

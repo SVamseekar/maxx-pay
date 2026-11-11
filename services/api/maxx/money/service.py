@@ -135,9 +135,12 @@ async def authorize_hold(store, user_id: str, order_id: str) -> tuple[Bloc, dict
     except PayPalError as exc:
         ledger.update_payment(payment["id"], status="FAILED", error=exc.name[:60] or "declined")
         raise _fail("PayPal could not place the hold. Try another payment method.") from exc
-    ledger.update_payment(
-        payment["id"], status="AUTHORIZED", authorization_id=auth["authorization_id"]
-    )
+    return await _seat(store, pp, bloc, payment, user_id, auth["authorization_id"])
+
+
+async def _seat(store, pp, bloc: Bloc, payment: dict, user_id: str, authorization_id: str):
+    """Record an authorized hold and give its buyer a seat, or release the hold."""
+    ledger.update_payment(payment["id"], status="AUTHORIZED", authorization_id=authorization_id)
     for _ in range(5):
         try:
             add_member(bloc, user_id, str(payment["max_amount"]))
@@ -146,10 +149,10 @@ async def authorize_hold(store, user_id: str, order_id: str) -> tuple[Bloc, dict
         except Conflict:
             bloc = store.get(payment["bloc_id"])
         except ValueError as exc:
-            await _void(pp, payment["id"], auth["authorization_id"], "join_failed")
+            await _void(pp, payment["id"], authorization_id, "join_failed")
             raise _fail(str(exc)) from exc
     else:
-        await _void(pp, payment["id"], auth["authorization_id"], "join_conflict")
+        await _void(pp, payment["id"], authorization_id, "join_conflict")
         raise _fail("The Bloc changed while you joined. Your hold was released; try again.")
     member = next(m for m in bloc.members if m.user_id == user_id and m.status == "HELD")
     ledger.update_payment(payment["id"], member_id=member.id)
@@ -165,6 +168,39 @@ async def authorize_hold(store, user_id: str, order_id: str) -> tuple[Bloc, dict
             ledger.update_payment(other["id"], status="FAILED", error="replaced")
     audit.record(f"user:{user_id[:8]}", "hold.placed", payment["id"], f"{payment['max_amount']}")
     return bloc, ledger.get(payment["id"])
+
+
+async def card_hold(store, bloc_id: str, user_id: str, max_price: Decimal) -> tuple[Bloc, dict]:
+    """A scripted sandbox buyer's hold, paid with PayPal's test card in one call (no popup).
+    Used only by the card-buyer tool to fill a shared demo Bloc with real sandbox holds."""
+    pp = get_paypal()
+    if pp is None or settings.paypal_mode not in {"sandbox", "simulator"}:
+        raise _fail("Card holds are only for the PayPal sandbox.")
+    if audit.payments_frozen():
+        raise _fail("New holds are paused for maintenance.")
+    bloc = store.get(bloc_id)
+    if bloc.status != "OPEN":
+        raise _fail("This Bloc is no longer open for joining.")
+    if max_price > Decimal(settings.hold_max_amount):
+        raise _fail(f"A single hold is limited to ${settings.hold_max_amount}.")
+    add_member(bloc.model_copy(deep=True), user_id, str(max_price))
+    auth = await pp.authorize_card(
+        max_price,
+        reference=bloc.id,
+        request_id=f"card-{uuid.uuid4()}",
+        description=f"Hold for {bloc.title}",
+    )
+    payment = ledger.new_payment(
+        "hold",
+        auth["order_id"],
+        max_price,
+        pp.simulated,
+        user_id=user_id,
+        bloc_id=bloc.id,
+        generation=bloc.generation,
+        meta="",
+    )
+    return await _seat(store, pp, bloc, payment, user_id, auth["authorization_id"])
 
 
 async def _void(pp, payment_id: str, authorization_id: str, reason: str) -> bool:

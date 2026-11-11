@@ -91,6 +91,11 @@ class Settings(BaseSettings):
     paypal_sdk_url: str = "https://www.sandbox.paypal.com/web-sdk/v6/core"
     platform_fee_percent: str = "8"
     settlement_concurrency: int = Field(default=10, ge=1, le=50)
+    # Spread PayPal calls over time: at most this many a minute from this process (0 = no cap).
+    # PayPal's sandbox blocks an IP for 5 minutes after 50 calls in one minute.
+    paypal_calls_per_minute: int = Field(default=0, ge=0, le=1000)
+    # Shared secret for the scripted card-buyer tool (/demo/bulk/*). Empty: tool off.
+    demo_bulk_token: str = ""
     paypal_negative_testing: bool = False
     checkout_max_amount: str = "500"
     checkout_premium_max_amount: str = "2000"

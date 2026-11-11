@@ -2,15 +2,25 @@
 
 from __future__ import annotations
 
+import asyncio
+import hmac
 import time
 import uuid
+from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
+from pydantic import BaseModel, Field
 
-from maxx.auth import ratelimit
+from maxx.auth import mail, ratelimit
+from maxx.auth import store as auth_store
 from maxx.auth.deps import CurrentUser, same_origin
+from maxx.config import settings
 from maxx.demo import catalogue, tour
-from maxx.negotiate.routes import DEMO_CROWD, RuntimeDep
+from maxx.fulfilment import service as fulfil_service
+from maxx.fulfilment import store as fulfil_store
+from maxx.money import service as money
+from maxx.money.paypal import PayPalError
+from maxx.negotiate.routes import DEMO_CROWD, RuntimeDep, get_bloc, is_private_copy
 from maxx.providers import ProviderError
 
 router = APIRouter(prefix="/demo", dependencies=[Depends(same_origin)])
@@ -87,3 +97,77 @@ def lab_copy(runtime, user_id: str, scenario: str, product: str | None = None) -
     bloc.owner_id = user_id
     runtime.store.create(bloc)
     return bloc.id
+
+
+# --- Scripted card buyers ------------------------------------------------------------------
+# Fills a shared demo Bloc with real PayPal sandbox holds, one guest buyer per call, each paid
+# with PayPal's sandbox test card in a single Orders call (no popup). Off unless
+# DEMO_BULK_TOKEN is set; the caller sends it in X-Demo-Token. These buyers are test
+# accounts, not people: their emails start with "bulk-" under the reserved judge domain.
+
+BULK_PREFIX = "bulk-"
+BULK_ADDRESS = {
+    "name": "Maxx Card Buyer",
+    "line1": "1 Main St",
+    "city": "San Jose",
+    "region": "CA",
+    "postal": "95131",
+    "country": "US",
+}
+
+
+class BulkBuyer(BaseModel):
+    bloc_id: str = Field(min_length=1, max_length=100)
+    max_price: Decimal = Field(gt=0, le=1000, decimal_places=2)
+
+
+class BulkBloc(BaseModel):
+    bloc_id: str = Field(min_length=1, max_length=100)
+
+
+def _bulk_allowed(token: str) -> None:
+    expected = settings.demo_bulk_token
+    if not expected or not hmac.compare_digest(token.encode(), expected.encode()):
+        raise HTTPException(404, "Not found.")
+
+
+@router.post("/bulk/buyer", status_code=201)
+async def bulk_buyer(
+    body: BulkBuyer, runtime: RuntimeDep, x_demo_token: str = Header(default="")
+) -> dict:
+    _bulk_allowed(x_demo_token)
+    bloc = get_bloc(runtime, body.bloc_id)
+    if is_private_copy(bloc):
+        raise HTTPException(403, "Card buyers only join shared demo Blocs.")
+    tag = uuid.uuid4().hex[:10]
+    user = await asyncio.to_thread(
+        auth_store.create_user,
+        f"{BULK_PREFIX}{tag}{mail.JUDGE_DOMAIN}",
+        f"Card buyer {tag[:4].upper()}",
+        None,
+        True,
+    )
+    fulfil_store.add_address(user.id, fulfil_store.Address(**BULK_ADDRESS))
+    try:
+        bloc, payment = await money.card_hold(runtime.store, bloc.id, user.id, body.max_price)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    except PayPalError as exc:
+        raise HTTPException(502, f"PayPal refused the hold: {exc.name or exc.status}") from None
+    return {"authorization_id": payment["authorization_id"], "buyers": len(bloc.members)}
+
+
+@router.post("/bulk/addresses")
+def bulk_addresses(body: BulkBloc, x_demo_token: str = Header(default="")) -> dict:
+    """Give each card buyer's won order its saved address, so the seller can ship it."""
+    _bulk_allowed(x_demo_token)
+    done = 0
+    for order in fulfil_store.orders_where(bloc_id=body.bloc_id, status="AWAITING_ADDRESS"):
+        user = auth_store.get_user(order["buyer_id"])
+        if not user or not user.email.startswith(BULK_PREFIX):
+            continue
+        saved = fulfil_store.list_addresses(user.id)
+        if saved:
+            fulfil_service.set_address(user.id, order["id"], saved[0]["id"])
+            done += 1
+    return {"addressed": done}

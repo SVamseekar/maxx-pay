@@ -449,7 +449,10 @@ def test_winning_from_a_simulated_seller_completes_like_any_order(runtime, monke
         shipped = orders.get_order(order["id"])
         assert shipped["status"] == "SHIPPED" and shipped["tracking"].startswith("1Z")
         payout = payout_for(order["id"])
-        assert payout["status"] == "SENT" and payout["receiver"] == settings.paypal_seller_receiver
+        expected = fulfilment.simulated_receivers().get(
+            order["seller_code"], settings.paypal_seller_receiver
+        )
+        assert payout["status"] == "SENT" and payout["receiver"] == expected
         problem = buyer.post(
             f"/orders/{order['id']}/problem",
             json={"kind": "not_received", "message": "Nothing has arrived after a week."},
@@ -470,3 +473,54 @@ def test_each_simulated_seller_can_be_paid_into_its_own_account(monkeypatch):
     assert pay({"simulated": True, "seller_code": "B"}, None) == "b@seller.example"
     assert pay({"simulated": True, "seller_code": "C"}, None) == settings.paypal_seller_receiver
     assert pay({"simulated": True, "seller_code": "H"}, None) == settings.paypal_seller_receiver
+
+
+def test_scripted_card_buyers_hold_settle_and_ship(runtime, monkeypatch):
+    """The card-buyer tool: real holds without a popup, then the same settlement and shipping."""
+    monkeypatch.setattr(settings, "simulated_seller_ship_seconds", 0)
+    with TestClient(app) as client:
+        body = {"bloc_id": "demo-success", "max_price": "190.00"}
+        assert client.post("/demo/bulk/buyer", json=body).status_code == 404  # tool off
+        monkeypatch.setattr(settings, "demo_bulk_token", "t" * 24)
+        token = {"X-Demo-Token": "t" * 24}
+        assert (
+            client.post("/demo/bulk/buyer", json=body, headers={"X-Demo-Token": "x"}).status_code
+            == 404
+        )
+        made = [client.post("/demo/bulk/buyer", json=body, headers=token) for _ in range(3)]
+        assert all(r.status_code == 201 and r.json()["authorization_id"] for r in made)
+        assert len({r.json()["authorization_id"] for r in made}) == 3
+        assert made[2].json()["buyers"] == made[0].json()["buyers"] + 2
+        sign_up(client, "starter@example.com")
+        buy(client)
+        client.post("/blocs/demo-success/start")
+        books = wait_settled(client)
+        assert books["reconciled"] is True
+        assert (
+            client.post(
+                "/demo/bulk/addresses", json={"bloc_id": "demo-success"}, headers=token
+            ).json()["addressed"]
+            >= 1
+        )
+        asyncio.run(fulfilment.sweep())
+        shipped = orders.orders_where(bloc_id="demo-success", status="SHIPPED")
+        assert len(shipped) >= 3
+
+
+def test_paypal_calls_are_paced_per_minute(monkeypatch):
+    from maxx.money.paypal import Pace
+
+    pace, slept = Pace(), []
+
+    async def fake_sleep(seconds):
+        slept.append(seconds)
+        pace.stamps.popleft()
+
+    monkeypatch.setattr("maxx.money.paypal.asyncio.sleep", fake_sleep)
+
+    async def run():
+        for _ in range(5):
+            await pace.wait(3)
+
+    asyncio.run(run())
+    assert len(slept) == 2 and all(s > 0 for s in slept)
