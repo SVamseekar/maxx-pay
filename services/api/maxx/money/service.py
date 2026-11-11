@@ -263,7 +263,8 @@ def _claim(bloc_id: str, generation: int) -> bool:
                 table.c.bloc_id == bloc_id, table.c.generation == generation
             )
         ).first()
-        if row.status == "DONE" or (row.status == "RUNNING" and stamp - row.started_at < 300):
+        fresh = row.status == "RUNNING" and stamp - row.started_at < CLAIM_STALE_SECONDS
+        if row.status == "DONE" or fresh:
             return False
         taken = db.execute(
             update(table)
@@ -314,6 +315,22 @@ def settlement_status(bloc_id: str, generation: int) -> str | None:
         ).scalar()
 
 
+CLAIM_STALE_SECONDS = 300
+
+
+def _running_is_stale(bloc_id: str, generation: int) -> bool:
+    """A RUNNING settlement whose worker stopped (a restart) and no longer keeps its claim fresh."""
+    with storage.get_store().engine.connect() as db:
+        started = db.execute(
+            select(schema.settlements.c.started_at).where(
+                schema.settlements.c.bloc_id == bloc_id,
+                schema.settlements.c.generation == generation,
+                schema.settlements.c.status == "RUNNING",
+            )
+        ).scalar()
+    return started is not None and time.time() - started >= CLAIM_STALE_SECONDS
+
+
 def pending_bloc_ids(store) -> list[str]:
     """Finished Blocs that may still owe PayPal work, found without loading any Bloc document."""
     with storage.get_store().engine.connect() as db:
@@ -341,7 +358,9 @@ def pending_bloc_ids(store) -> list[str]:
 def needs_settlement(bloc: Bloc) -> bool:
     if not enabled() or bloc.status not in {"SETTLED", "FAILED"}:
         return False
-    if settlement_status(bloc.id, bloc.generation) in {"DONE", "RUNNING"}:
+    status = settlement_status(bloc.id, bloc.generation)
+    live = status == "RUNNING" and not _running_is_stale(bloc.id, bloc.generation)
+    if status == "DONE" or live:
         return False
     return (
         any(

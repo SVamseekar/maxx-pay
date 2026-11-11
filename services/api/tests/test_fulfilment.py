@@ -576,3 +576,13 @@ def test_queued_webhook_checks_are_capped(monkeypatch):
     client = PayPalClient("https://example.invalid", "id", "secret")
     client._pace.others = 2
     assert client.busy()
+
+
+def test_a_settlement_cut_off_by_a_restart_is_resumed(runtime):
+    from maxx.money import service as money_service
+
+    assert money_service._claim("demo-y", 1)
+    assert not money_service._running_is_stale("demo-y", 1)
+    with storage.get_store().engine.begin() as db:
+        db.execute(update(schema.settlements).values(started_at=int(time.time()) - 400))
+    assert money_service._running_is_stale("demo-y", 1)
