@@ -187,3 +187,20 @@ def test_wrong_codes_never_use_up_the_shared_entry_allowance(runtime, monkeypatc
         assert ratelimit.count("judge-entry:all", 3600) == before
         assert client.post("/auth/judge", json={"code": CODE}).status_code == 200
     assert ratelimit.count("judge-entry:all", 3600) == before + 1
+
+
+def test_a_judge_guest_is_never_asked_to_reconfirm_who_they_are():
+    """Guests have no password, passkey or reachable inbox, so a re-check would lock them out."""
+    import asyncio
+
+    from fastapi import HTTPException
+
+    from maxx.auth.deps import fresh_user
+    from maxx.auth.store import SessionRow
+
+    user = object()
+    stale = SessionRow(key="k", created_at=0, recent_auth_at=0, auth_method="judge")
+    assert asyncio.run(fresh_user((user, stale))) is user
+    other = SessionRow(key="k", created_at=0, recent_auth_at=0, auth_method="password")
+    with pytest.raises(HTTPException):
+        asyncio.run(fresh_user((user, other)))

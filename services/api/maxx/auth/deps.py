@@ -106,6 +106,10 @@ async def fresh_user(
     if context is None:
         raise HTTPException(401, "Sign in to continue.")
     user, session = context
+    # A judge's guest account has no password, passkey or reachable email to confirm with, so
+    # it could never pass this check. It holds only sandbox money and lives in one browser.
+    if session.auth_method == "judge":
+        return user
     if store.now() - session.recent_auth_at > settings.reauth_minutes * 60:
         raise CodedError(403, "Confirm it's you to continue.", "reauth_required")
     return user

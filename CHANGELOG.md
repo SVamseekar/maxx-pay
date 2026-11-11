@@ -60,6 +60,9 @@ numbered releases yet; chapters are named by date and purpose.
 
 ### Fixed
 
+- A judge's guest account was asked to confirm who they are before agent checkout over $200,
+  with no password, passkey or inbox to do it with. Judge sessions now skip that re-check.
+
 - The web app now reads the monorepo's root `.env`, so its Content-Security-Policy allows PayPal's
   sandbox and the approval popup loads
   ([`c138069`](https://github.com/SVamseekar/maxx-pay/commit/c138069)).
