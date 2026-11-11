@@ -459,3 +459,14 @@ def test_winning_from_a_simulated_seller_completes_like_any_order(runtime, monke
         assert orders.get_order(order["id"])["status"] == "REFUNDED"
         assert ledger.by_order(hold_id)["status"] == "REFUNDED"
     assert money.payout_rows("demo-success")
+
+
+def test_each_simulated_seller_can_be_paid_into_its_own_account(monkeypatch):
+    monkeypatch.setattr(
+        settings, "paypal_seller_receivers", " A=a@seller.example , B=b@seller.example,bad,C= "
+    )
+    pay = fulfilment._receiver
+    assert pay({"simulated": True, "seller_code": "A"}, None) == "a@seller.example"
+    assert pay({"simulated": True, "seller_code": "B"}, None) == "b@seller.example"
+    assert pay({"simulated": True, "seller_code": "C"}, None) == settings.paypal_seller_receiver
+    assert pay({"simulated": True, "seller_code": "H"}, None) == settings.paypal_seller_receiver

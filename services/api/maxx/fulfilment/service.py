@@ -478,9 +478,16 @@ def payout_gate(order: dict, seller: dict | None) -> str | None:
     return None if trusted(seller, order["seller_code"]) else "awaiting_delivery"
 
 
+def simulated_receivers() -> dict[str, str]:
+    """Sandbox accounts for the simulated sellers, by seller code, from PAYPAL_SELLER_RECEIVERS."""
+    parts = settings.paypal_seller_receivers.split(",")
+    pairs = (part.split("=", 1) for part in parts if "=" in part)
+    return {code.strip(): email.strip() for code, email in pairs if code.strip() and email.strip()}
+
+
 def _receiver(order: dict, seller: dict | None) -> str | None:
     if order["simulated"]:
-        return settings.paypal_seller_receiver
+        return simulated_receivers().get(order["seller_code"], settings.paypal_seller_receiver)
     if seller and seller["status"] == "ACTIVE" and seller["payout_verified"]:
         return seller["payout_email"]
     return None

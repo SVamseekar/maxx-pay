@@ -33,6 +33,9 @@ numbered releases yet; chapters are named by date and purpose.
   for each product, also shown on Bloc cards and in the room header.
 - The three shared demo scenarios each show a different product: headphones (successful deal),
   a stand mixer (no deal) and an air purifier (seller withdrawal).
+- Each simulated seller agent can be paid into its own PayPal sandbox account
+  (`PAYPAL_SELLER_RECEIVERS`), so payouts fan out to several sellers instead of one shared
+  receiver.
 
 ### Changed
 

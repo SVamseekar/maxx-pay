@@ -43,6 +43,8 @@ services:
       # Payouts go here; it must be a different sandbox account from the one the app belongs to.
       - key: PAYPAL_SELLER_RECEIVER
         sync: false
+      - key: PAYPAL_SELLER_RECEIVERS
+        sync: false
       # Production refuses to start without it, so webhook signatures can be verified.
       - key: PAYPAL_WEBHOOK_ID
         sync: false

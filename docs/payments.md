@@ -97,7 +97,8 @@ Checked on 8 Nov 2026: the v6 SDK popup opens and returns an approval, authorize
 | `PLATFORM_FEE_PERCENT` | `8` | Taken from the seller side of each payout. Sized to cover PayPal's capture fee (3.49% + $0.49 in sandbox) and the payout fee |
 | `SETTLEMENT_CONCURRENCY` | `10` | Parallel PayPal calls during a settlement |
 | `PAYPAL_NEGATIVE_TESTING` | `false` | Shows the "Test a failure" menu |
-| `PAYPAL_SELLER_RECEIVER` | placeholder | Receiver for seller payouts (one account for all sellers in the demo) |
+| `PAYPAL_SELLER_RECEIVER` | placeholder | Receiver for seller payouts for any simulated seller not listed in `PAYPAL_SELLER_RECEIVERS` |
+| `PAYPAL_SELLER_RECEIVERS` | empty | Optional sandbox account per simulated seller, `A=a@…,B=b@…`, so each seller agent's payouts land in its own PayPal account |
 | `PAYPAL_PLAN_WEEKLY`, `PAYPAL_PLAN_YEARLY` | empty | PayPal billing plan ids (sandbox) |
 | `CHECKOUT_MAX_AMOUNT`, `CHECKOUT_PREMIUM_MAX_AMOUNT` | `500`, `2000` | Agent checkout limits |
 | `SIMULATOR_WEBHOOK_SECRET` | published default | Must be changed in production if the simulator is on |

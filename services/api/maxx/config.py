@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     paypal_plan_yearly: str = ""
     checkout_proposal_minutes: int = Field(default=10, ge=1, le=60)
     paypal_seller_receiver: str = "sb-seller@maxx.example"
+    # Optional per simulated seller: "A=a@example.com,B=b@example.com". A simulated seller not
+    # listed is paid to paypal_seller_receiver.
+    paypal_seller_receivers: str = ""
     # Sellers: `auto` activates a seller once their payout email is confirmed; `manual` also
     # needs an administrator's approval (required in production).
     seller_review: str = "auto"
