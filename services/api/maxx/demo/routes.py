@@ -171,3 +171,14 @@ def bulk_addresses(body: BulkBloc, x_demo_token: str = Header(default="")) -> di
             fulfil_service.set_address(user.id, order["id"], saved[0]["id"])
             done += 1
     return {"addressed": done}
+
+
+@router.post("/bulk/reset")
+async def bulk_reset(runtime: RuntimeDep, x_demo_token: str = Header(default="")) -> dict:
+    """Restore the shared demo Blocs before a scripted run, like an administrator's reset."""
+    _bulk_allowed(x_demo_token)
+    async with runtime.lock:
+        if any(b.status == "NEGOTIATING" for b in runtime.store.list()):
+            raise HTTPException(409, "Wait for active negotiations to finish first.")
+        runtime.seed(reset=True)
+        return {b.id: b.status for b in runtime.store.list() if b.id.startswith("demo-")}

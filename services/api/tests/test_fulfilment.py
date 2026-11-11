@@ -489,6 +489,7 @@ def test_scripted_card_buyers_hold_settle_and_ship(runtime, monkeypatch):
         )
         made = [client.post("/demo/bulk/buyer", json=body, headers=token) for _ in range(3)]
         assert all(r.status_code == 201 and r.json()["authorization_id"] for r in made)
+        assert client.post("/demo/bulk/reset", headers={"X-Demo-Token": "x"}).status_code == 404
         assert len({r.json()["authorization_id"] for r in made}) == 3
         assert made[2].json()["buyers"] == made[0].json()["buyers"] + 2
         sign_up(client, "starter@example.com")
@@ -534,3 +535,10 @@ def test_a_long_settlement_keeps_its_claim(runtime):
         db.execute(update(schema.settlements).values(started_at=int(time.time()) - 400))
     money_service._heartbeat("demo-x", 1)
     assert not money_service._claim("demo-x", 1)
+
+
+def test_the_bulk_tool_resets_the_shared_demo_blocs(runtime, monkeypatch):
+    monkeypatch.setattr(settings, "demo_bulk_token", "t" * 24)
+    with TestClient(app) as client:
+        reset = client.post("/demo/bulk/reset", headers={"X-Demo-Token": "t" * 24})
+        assert reset.status_code == 200 and reset.json()["demo-success"] == "OPEN"
