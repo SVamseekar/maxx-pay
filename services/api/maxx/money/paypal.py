@@ -71,15 +71,16 @@ class Pace:
         self.lock: asyncio.Lock | None = None
         self.waiting = 0  # callers queued for a turn right now
 
-    async def wait(self, per_minute: int) -> None:
+    async def wait(self, per_minute: int, counted: bool = True) -> None:
+        """`counted` callers are money calls; only they make the client report itself busy."""
         if per_minute <= 0:
             return
         self.lock = self.lock or asyncio.Lock()
-        self.waiting += 1
+        self.waiting += counted
         try:
             await self._turn(per_minute)
         finally:
-            self.waiting -= 1
+            self.waiting -= counted
 
     async def _turn(self, per_minute: int) -> None:
         assert self.lock is not None
@@ -150,8 +151,9 @@ class PayPalClient:
         request_id: str | None = None,
         mock: str | None = None,
         accept: tuple[int, ...] = (200, 201, 202, 204),
+        money: bool = True,
     ) -> dict[str, Any]:
-        await self._pace.wait(settings.paypal_calls_per_minute)
+        await self._pace.wait(settings.paypal_calls_per_minute, counted=money)
         headers = {"Authorization": f"Bearer {await self._access_token()}"}
         if request_id:
             headers["PayPal-Request-Id"] = request_id[:108]
@@ -446,6 +448,7 @@ class PayPalClient:
                 "webhook_id": settings.paypal_webhook_id,
                 "webhook_event": event,
             },
+            money=False,
         )
         return check.get("verification_status") == "SUCCESS"
 

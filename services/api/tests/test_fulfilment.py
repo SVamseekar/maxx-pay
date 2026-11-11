@@ -554,3 +554,16 @@ def test_webhooks_wait_while_paypal_calls_are_queued(monkeypatch):
     assert client.busy()
     monkeypatch.setattr(settings, "paypal_calls_per_minute", 0)
     assert not client.busy()
+
+
+def test_webhook_checks_never_count_as_busy(monkeypatch):
+    from maxx.money.paypal import Pace
+
+    monkeypatch.setattr(settings, "paypal_calls_per_minute", 40)
+    pace = Pace()
+
+    async def run():
+        await pace.wait(40, counted=False)
+        return pace.waiting
+
+    assert asyncio.run(run()) == 0

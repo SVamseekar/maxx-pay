@@ -219,6 +219,9 @@ async def paypal_webhook(request: Request):
     if stale:
         audit.record("paypal", "webhook.stale", client_ip(request), stale)
         raise HTTPException(400, "This event is too old or from the future.")
+    # An address whose events keep failing the signature check gets no more PayPal calls.
+    if ratelimit.count(f"webhook-bad:{client_ip(request)}", 60) >= 10:
+        raise HTTPException(429, "Too many rejected events.")
     pp = get_paypal()
     if getattr(pp, "busy", lambda: False)():
         # Money calls come first. PayPal retries a webhook for up to three days.
