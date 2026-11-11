@@ -220,6 +220,9 @@ async def paypal_webhook(request: Request):
         audit.record("paypal", "webhook.stale", client_ip(request), stale)
         raise HTTPException(400, "This event is too old or from the future.")
     pp = get_paypal()
+    if getattr(pp, "busy", lambda: False)():
+        # Money calls come first. PayPal retries a webhook for up to three days.
+        raise HTTPException(503, "Busy. PayPal will retry this event.")
     try:
         verified = await pp.verify_webhook(dict(request.headers), body)
     except PayPalError:

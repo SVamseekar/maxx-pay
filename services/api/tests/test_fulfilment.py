@@ -542,3 +542,15 @@ def test_the_bulk_tool_resets_the_shared_demo_blocs(runtime, monkeypatch):
     with TestClient(app) as client:
         reset = client.post("/demo/bulk/reset", headers={"X-Demo-Token": "t" * 24})
         assert reset.status_code == 200 and reset.json()["demo-success"] == "OPEN"
+
+
+def test_webhooks_wait_while_paypal_calls_are_queued(monkeypatch):
+    from maxx.money.paypal import PayPalClient
+
+    monkeypatch.setattr(settings, "paypal_calls_per_minute", 40)
+    client = PayPalClient("https://example.invalid", "id", "secret")
+    assert not client.busy()
+    client._pace.waiting = 3
+    assert client.busy()
+    monkeypatch.setattr(settings, "paypal_calls_per_minute", 0)
+    assert not client.busy()

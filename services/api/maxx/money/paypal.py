@@ -69,11 +69,20 @@ class Pace:
     def __init__(self) -> None:
         self.stamps: deque[float] = deque()
         self.lock: asyncio.Lock | None = None
+        self.waiting = 0  # callers queued for a turn right now
 
     async def wait(self, per_minute: int) -> None:
         if per_minute <= 0:
             return
         self.lock = self.lock or asyncio.Lock()
+        self.waiting += 1
+        try:
+            await self._turn(per_minute)
+        finally:
+            self.waiting -= 1
+
+    async def _turn(self, per_minute: int) -> None:
+        assert self.lock is not None
         async with self.lock:
             while True:
                 now = time.monotonic()
@@ -405,6 +414,10 @@ class PayPalClient:
             {"reason": reason[:128]},
             f"cancel-{subscription_id}",
         )
+
+    def busy(self) -> bool:
+        """PayPal calls are already queued behind the per-minute cap."""
+        return settings.paypal_calls_per_minute > 0 and self._pace.waiting >= 2
 
     async def verify_webhook(self, headers: dict[str, str], body: bytes) -> bool:
         lowered = {k.lower(): v for k, v in headers.items()}
