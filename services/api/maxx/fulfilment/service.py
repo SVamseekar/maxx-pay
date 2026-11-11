@@ -493,6 +493,20 @@ def _receiver(order: dict, seller: dict | None) -> str | None:
     return None
 
 
+# PayPal refusals that are about Maxx's own balance, not the seller: try again later.
+RETRY_LATER = {"INSUFFICIENT_FUNDS"}
+RETRY_AFTER_SECONDS = 600
+
+
+def _retry_due(payout: dict) -> bool:
+    """A payout refused for a reason that clears with time, and its wait is over."""
+    return (
+        payout["status"] in {"PENDING", "FAILED"}
+        and payout["failure_reason"] in RETRY_LATER
+        and time.time() >= payout["updated_at"] + RETRY_AFTER_SECONDS
+    )
+
+
 async def release_payout(order_id: str) -> str:
     """Pay the seller for a shipped order, once. Returns SENT, FAILED, WAITING, OFFSET or NONE."""
     order = store.get_order(order_id)
@@ -500,7 +514,10 @@ async def release_payout(order_id: str) -> str:
     if pp is None or not order or order["status"] not in {"SHIPPED", "DELIVERED"}:
         return "NONE"
     existing = _payout_for_order(order_id)
-    if existing and existing["status"] in {"SENT", "OFFSET", "FAILED"}:
+    if existing and existing["failure_reason"] in RETRY_LATER and existing["status"] != "SENT":
+        if not _retry_due(existing):
+            return "WAITING"
+    elif existing and existing["status"] in {"SENT", "OFFSET", "FAILED"}:
         return existing["status"]
     if store.open_case_for(order_id) or audit.payments_frozen():
         return "WAITING"  # a dispute or the emergency brake pauses the money
@@ -576,6 +593,15 @@ async def _send(pp, order: dict, row: dict) -> str:
         status, paypal_id, reason = "SENT", batch["batch_id"], ""
     except PayPalError as exc:
         if exc.retryable:
+            return "WAITING"
+        if exc.name in RETRY_LATER:
+            # Maxx's PayPal balance has not cleared enough yet; the seller did nothing wrong.
+            with storage.get_store().engine.begin() as db:
+                db.execute(
+                    update(schema.payouts)
+                    .where(schema.payouts.c.sender_batch_id == batch_id)
+                    .values(status="PENDING", failure_reason=exc.name, updated_at=int(time.time()))
+                )
             return "WAITING"
         status, paypal_id, reason = "FAILED", None, exc.name[:120] or "refused"
     with storage.get_store().engine.begin() as db:
@@ -1130,7 +1156,7 @@ async def sweep() -> dict:
                     f"no-scan-seller:{order['id']}",
                 )
         payout = _payout_for_order(order["id"])
-        if payout is None or payout["status"] == "PENDING":
+        if payout is None or payout["status"] == "PENDING" or _retry_due(payout):
             if await release_payout(order["id"]) in {"SENT", "OFFSET"}:
                 done["paid"] += 1
         if (
