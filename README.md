@@ -6,8 +6,8 @@ all of them at once. Each buyer is charged only the price they were allocated, n
 their hold, and the hold is released in full if no deal closes. Sellers are paid through PayPal
 when the parcel arrives.
 
-**Live demo:** https://pay.souravamseekar.com · **Judges:** start at
-[`/judge`](https://pay.souravamseekar.com/judge) · MIT licensed
+**Live demo:** https://pay.souravamseekar.com · **Demo video (3 min):** https://youtu.be/XfvxrhKwsSg ·
+**Judges:** start at [`/judge`](https://pay.souravamseekar.com/judge) · MIT licensed
 
 Built for the **PayPal AI Hackathon**. Money moves through the **PayPal sandbox** (Orders,
 Payments, Payouts, Webhooks, JavaScript SDK v6); the agents run on **NVIDIA Nemotron** models on
