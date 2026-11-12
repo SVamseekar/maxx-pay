@@ -1,10 +1,10 @@
 # Changelog
 
 What changed in Maxx and when, newest first. Each chapter links to its commits; every commit keeps
-its original date. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Maxx has no
-numbered releases yet; chapters are named by date and purpose.
+its original date. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Chapters are
+named by date and purpose; the PayPal AI Hackathon submission is tagged `paypal-submission`.
 
-## Unreleased: PayPal AI Hackathon entry (from 8 November 2026)
+## 8 to 12 November 2026: PayPal AI Hackathon entry ([`paypal-submission`](https://github.com/SVamseekar/maxx-pay/releases/tag/paypal-submission))
 
 [All changes since the Nebius submission](https://github.com/SVamseekar/maxx-pay/compare/89495fe...main)
 
